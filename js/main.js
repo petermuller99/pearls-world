@@ -235,7 +235,16 @@ document.querySelector('label[for=photo]').addEventListener('keydown', e => { if
 // Install on phone (works offline).
 let installEv = null;
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEv = e; $('installBtn').hidden = false; });
-$('installBtn').onclick = async () => { if (!installEv) return; installEv.prompt(); try { await installEv.userChoice; } catch (_) {} installEv = null; $('installBtn').hidden = true; };
+$('installBtn').onclick = async () => {
+  if (isIOS) { sfx.click(); $('menu').hidden = true; $('iosPanel').hidden = false; return; }
+  if (!installEv) return; installEv.prompt(); try { await installEv.userChoice; } catch (_) {} installEv = null; $('installBtn').hidden = true;
+};
+// iPhone and iPad can't show an install prompt, so offer step-by-step help instead
+// (Share, then Add to Home Screen). Hidden once the game is opened from the home screen.
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const installed = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+if (isIOS && !installed) { $('installBtn').textContent = /iPad/.test(navigator.userAgent) || navigator.platform === 'MacIntel' ? "Put Pearl's World on this iPad" : "Put Pearl's World on this iPhone"; $('installBtn').hidden = false; }
+$('iosDone').onclick = () => { sfx.click(); $('iosPanel').hidden = true; $('menu').hidden = false; };
 addEventListener('appinstalled', () => { installEv = null; $('installBtn').hidden = true; });
 
 /* ---------- input, passed to the current game ---------- */
