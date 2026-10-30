@@ -2,7 +2,7 @@
 // Game files: serve from cache straight away, refresh the cache in the background,
 // so the game opens instantly offline and picks up updates on the next launch.
 // Bump VERSION when the list of files below changes.
-const VERSION = 'pw-v17';
+const VERSION = 'pw-v18';
 const SHELL = [
   './',
   'index.html',
@@ -37,7 +37,8 @@ const SHELL = [
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's own HTTP cache so a new version is really new.
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -61,17 +62,17 @@ self.addEventListener('fetch', e => {
       const nav = req.mode === 'navigate';
       const key = nav ? url.origin + url.pathname : req;
       const cached = await cache.match(key, { ignoreSearch: nav });
-      const fresh = fetch(req)
+      const fresh = fetch(sameOrigin ? new Request(req, { cache: 'no-cache' }) : req)
         .then(res => {
           if (res.ok || res.type === 'opaque') cache.put(key, res.clone());
           return res;
-        })
-        .catch(() => cached);
-      if (cached) {
-        e.waitUntil(fresh);
-        return cached;
-      }
-      return fresh;
+        });
+      // Fonts: cache first. The game's own files: newest from the network when online (so
+      // updates show straight away), the saved copy when offline or the network is too slow.
+      if (cached && !sameOrigin) { e.waitUntil(fresh.catch(() => {})); return cached; }
+      if (!cached) return fresh;
+      const slow = new Promise(r => setTimeout(() => r(cached), 4000));
+      return Promise.race([fresh.catch(() => cached), slow]);
     })
   );
 });
