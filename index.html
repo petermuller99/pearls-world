@@ -56,7 +56,16 @@ p{margin:0}
 .house.close .track{animation:throb .5s ease-in-out infinite alternate}
 .house.close .fill{background:var(--blush)}
 #crosshair{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid var(--pearl);border-radius:50%;box-shadow:0 0 0 2px rgba(36,22,61,.6);pointer-events:none}
-.who{position:absolute;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center}
+.seeds{position:absolute;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center}
+.seeds button{flex:0 1 58px;height:62px;border-radius:14px;border:3px solid var(--ink);background:var(--pearl);box-shadow:0 3px 0 var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;cursor:pointer}
+.seeds button span{font-size:24px;line-height:1}
+.seeds button b{font:800 12px var(--body);color:var(--ink)}
+.seeds button.poor{opacity:.45}
+.seeds button[aria-pressed=true]{background:var(--sun);transform:translateY(-4px)}
+.warn{position:absolute;top:45%;padding:8px 10px;background:var(--blush);color:var(--pearl);border:3px solid var(--ink);font:400 18px var(--display);text-shadow:1px 1px 0 var(--ink);animation:throb .45s ease-in-out infinite alternate;pointer-events:none}
+.warn.left{left:0;border-radius:0 14px 14px 0;border-left:0}
+.warn.right{right:0;border-radius:14px 0 0 14px;border-right:0}
+.who{position:absolute;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(84px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center}
 .who button{width:56px;height:56px;border-radius:50%;border:3px solid var(--ink);background:var(--pearl);font-size:28px;cursor:pointer;box-shadow:0 4px 0 var(--ink);padding:0}
 .who button[aria-pressed=true]{background:var(--sun);transform:translateY(-3px)}
 .who span{font:400 15px var(--display);color:var(--pearl);text-shadow:2px 2px 0 var(--ink)}
@@ -69,6 +78,7 @@ p{margin:0}
 .steps .share{vertical-align:-5px;background:#fff;border:2px solid var(--ink);border-radius:8px;padding:2px}
 .shop{gap:10px}
 .items{display:flex;flex-direction:column;gap:8px}
+.shopGroup{margin:6px 0 0;font:800 12px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--lagoon)}
 .item{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:10px;border:3px solid var(--ink);border-radius:16px;padding:8px 10px;background:#fff}
 .item .icon{font-size:28px;text-align:center}
 .item .info{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -146,6 +156,9 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
   </div>
   <div id="ink" aria-hidden="true"></div>
   <div id="crosshair" hidden aria-hidden="true"></div>
+  <div id="seedBar" class="seeds" hidden role="group" aria-label="Defenders to plant"></div>
+  <div id="warnL" class="warn left" hidden aria-label="Zombies on your left"></div>
+  <div id="warnR" class="warn right" hidden aria-label="Zombies on your right"></div>
   <div id="whoBar" class="who" hidden role="group" aria-label="Who is shooting">
     <button data-who="pearl" aria-label="Pearl, bubble blaster">👶🏾</button>
     <button data-who="mum" aria-label="Mummy, slipper toss">👩🏾</button>
@@ -178,7 +191,7 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
         </button>
         <button class="mode zombie" id="playZombie">
           <span class="mt">Zombie Defence</span>
-          <span class="md">Silly zombies want Pearl! Pearl, Mummy and Daddy defend the house. Drag to look, tap to shoot.</span>
+          <span class="md">Silly zombies want Pearl! Defend the house from every side: shoot, switch shooters, and plant pepper shooters, mango lobbers and more.</span>
         </button>
       </div>
       <div class="diff" id="difficulty" role="group" aria-label="Difficulty">

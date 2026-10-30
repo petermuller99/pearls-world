@@ -65,7 +65,26 @@ function hud() {
     $('houseFill').style.width = `${game.house}%`; $('houseBar').classList.toggle('close', game.house < 30);
     for (const b of document.querySelectorAll('#whoBar button')) b.setAttribute('aria-pressed', String(b.dataset.who === game.who));
     $('whoWeapon').textContent = game.whoInfo[game.who].weapon;
+    // Seed bar: the defenders you can plant, greyed out until you can afford them.
+    const bar = $('seedBar');
+    if (!bar.children.length) for (const [k, D] of Object.entries(game.DEFS)) {
+      const b = document.createElement('button'); b.dataset.k = k; b.setAttribute('aria-label', `${D.name}, ₦${D.cost}`);
+      b.innerHTML = `<span>${D.icon}</span><b>₦${D.cost}</b>`;
+      b.onclick = () => { unlock(); sfx.click(); game.select(k); };
+      bar.appendChild(b);
+    }
+    for (const b of bar.children) { const D = game.DEFS[b.dataset.k]; b.classList.toggle('poor', game.cash < D.cost); b.setAttribute('aria-pressed', String(game.placing === b.dataset.k)); }
+    const [wl, wr] = game.warn;
+    $('warnL').hidden = !(wl && S.mode === 'play'); $('warnR').hidden = !(wr && S.mode === 'play');
+    $('warnL').textContent = `⚠️ ${wl}`; $('warnR').textContent = `${wr} ⚠️`;
+    const hint = $('hint');
+    if (game.placing) { hint.textContent = `Tap the yard to plant a ${game.DEFS[game.placing].name}`; hint.classList.remove('off'); }
+    else if (hint.textContent.startsWith('Tap the yard')) hint.classList.add('off');
   }
+  $('seedBar').hidden = !z || S.mode !== 'play';
+  // Keep the hint above the seed bar in Zombie Defence.
+  $('hint').style.bottom = z ? 'calc(156px + env(safe-area-inset-bottom, 0px))' : '';
+  if (!z) { $('warnL').hidden = true; $('warnR').hidden = true; }
   $('fireBtn').hidden = S.mode !== 'play' || S.ammo <= 0 || !!game.noFireButton;
   $('ammo').textContent = S.ammo;
   $('shieldBadge').hidden = !(S.shieldT > 0 && S.mode === 'play');
