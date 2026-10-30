@@ -129,9 +129,9 @@ export function createPowers(scene, P, S, { banner, hud }) {
   return {
     grant(kind) {
       sfx.power();
-      if (kind === 'fire') { S.ammo = Math.min(9, S.ammo + 5); banner('Fireballs! Tap 🔥 to throw'); }
-      else if (kind === 'shield') { S.shieldT = 12; banner('Shield bubble!'); }
-      else { S.magnetT = 9; banner('Pearl magnet!'); }
+      if (kind === 'fire') { S.ammo = Math.min(12, S.ammo + S.up.firePack); banner('Fireballs! Tap 🔥 to throw'); }
+      else if (kind === 'shield') { S.shieldT = S.up.shieldTime; banner('Shield bubble!'); }
+      else { S.magnetT = S.up.magnetTime; banner('Pearl magnet!'); }
       hud();
     },
     // Throws a fireball from `from` along `vel`. Returns false when out of fireballs.

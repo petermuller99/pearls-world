@@ -3,6 +3,7 @@
 import { THREE, $, store, damp, makePearl, applyPhoto, applyLook, makeConfetti, LOOKS, DEFAULT_LOOK } from './common.js';
 import { audio, sfx, unlock, setSfx, setMusic, playMusic, stopMusic, setMusicLevel, pauseAudio, resumeAudio } from './audio.js';
 import { createPowers, GAP_MAX, GAP_START, DIFFICULTY } from './chase.js';
+import { loadUpgrades, saveUpgrades, upgradeEffects, renderShop } from './shop.js';
 import { createRunner } from './runner.js';
 import { createHunt } from './hunt.js';
 
@@ -33,7 +34,8 @@ addEventListener('resize', resize);
 
 /* ---------- shared game state ---------- */
 let diffKey = DIFFICULTY[store.get('pw_difficulty', 'normal')] ? store.get('pw_difficulty', 'normal') : 'normal';
-const S = { diff: DIFFICULTY[diffKey], mode: 'menu', t: 0, pearls: 0, inv: 0, cam: 0, paused: false, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false };
+let upgrades = loadUpgrades();
+const S = { up: upgradeEffects(upgrades), diff: DIFFICULTY[diffKey], mode: 'menu', t: 0, pearls: 0, inv: 0, cam: 0, paused: false, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false };
 let bank = store.get('pw_bank', 0);
 const P = makePearl();
 scene.add(P.root);
@@ -77,7 +79,19 @@ function levelUp(lv) {
   sfx.levelUp(); setMusicLevel(lv);
   banner(`Level ${lv}! Faster!`);
 }
-function updateBank() { $('bank').textContent = bank; $('best').textContent = store.get('pw_best', 0); }
+function updateBank() { $('bank').textContent = bank; $('best').textContent = store.get('pw_best', 0); $('shopBank').textContent = bank; }
+
+/* ---------- market stall (shop) ---------- */
+function showShop() { $('shopBank').textContent = bank; renderShop($('shopList'), upgrades, bank, buy); }
+function buy(u) {
+  const cost = u.costs[upgrades[u.id]];
+  if (cost == null || bank < cost) return;
+  bank -= cost; store.set('pw_bank', bank);
+  upgrades[u.id]++; saveUpgrades(upgrades); S.up = upgradeEffects(upgrades);
+  sfx.power(); confetti.burst(P.root.position.clone().setY(P.root.position.y + 1.4), 40);
+  banner(`${u.name} level ${upgrades[u.id]}!`);
+  updateBank(); showShop();
+}
 
 const powers = createPowers(scene, P, S, { banner, hud: () => hud() });
 const ctx = { scene, P, confetti, S, hurt, boost, mumSay, banner, hud: () => hud(), camera, levelUp, powers };
@@ -94,7 +108,8 @@ function start(id) {
   unlock(); sfx.start();
   switchTo(id);
   confetti.clear();
-  Object.assign(S, { mode: 'play', pearls: 0, inv: 0, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false });
+  S.up = upgradeEffects(upgrades);
+  Object.assign(S, { mode: 'play', pearls: 0, inv: 0, gap: Math.min(GAP_MAX, GAP_START + S.up.headStart), ammo: S.up.startAmmo, shieldT: 0, magnetT: 0, stumble: 0, caught: false });
   powers.reset();
   setPaused(false);
   game.start();
@@ -212,6 +227,8 @@ function buildLook() {
   chipRow($('lookOutfit'), Object.keys(LOOKS.outfit), 'outfit', (b, v) => { swatch(b, LOOKS.outfit[v][0], v + ' ankara'); b.style.background = `radial-gradient(circle at 50% 50%, ${LOOKS.outfit[v][2]} 0 4px, ${LOOKS.outfit[v][1]} 4px 9px, ${LOOKS.outfit[v][0]} 9px)`; });
 }
 $('lookBtn').onclick = () => { unlock(); sfx.click(); buildLook(); $('menu').hidden = true; $('lookPanel').hidden = false; };
+$('shopBtn').onclick = () => { unlock(); sfx.click(); showShop(); $('menu').hidden = true; $('shopPanel').hidden = false; };
+$('shopDone').onclick = () => { sfx.click(); $('shopPanel').hidden = true; $('menu').hidden = false; updateBank(); };
 $('lookDone').onclick = () => { sfx.click(); $('lookPanel').hidden = true; $('menu').hidden = false; };
 document.querySelector('label[for=photo]').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('photo').click(); } });
 
@@ -250,7 +267,7 @@ function update(dt) {
   if (S.mode === 'play') {
     // Pearl slowly pulls away again while she runs cleanly. Mummy gets quicker at higher levels.
     const lv = game.st.level || 1;
-    S.gap = Math.min(GAP_MAX, S.gap + dt * Math.max(.04, .16 - lv * .01) * S.diff.regen);
+    S.gap = Math.min(GAP_MAX, S.gap + dt * Math.max(.04, .16 - lv * .01) * S.diff.regen * S.up.regen);
     if (S.stumble > 0) S.stumble -= dt;
     S.hudT = (S.hudT || 0) - dt; if (S.hudT <= 0) { S.hudT = .2; hud(); }
   }
@@ -264,7 +281,7 @@ function update(dt) {
   const e = S.cam * S.cam * (3 - 2 * S.cam);
   game.placeCamera(camera, e, camera.aspect > 1.2, front, behind, camTarget);
   // While the look panel is open in portrait, slide the picture up so Pearl stands above the panel.
-  S.lift = damp(S.lift || 0, !$('lookPanel').hidden && camera.aspect < 1.2 ? .07 : 0, 6, dt);
+  S.lift = damp(S.lift || 0, (!$('lookPanel').hidden || !$('shopPanel').hidden) && camera.aspect < 1.2 ? .07 : 0, 6, dt);
   const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
   if (S.lift > .002) camera.setViewOffset(w, h, 0, h * S.lift, w, h); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) $('banner').classList.add('off'); }

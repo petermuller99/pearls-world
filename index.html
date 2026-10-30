@@ -54,6 +54,18 @@ p{margin:0}
 .bank{font-size:14px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
 .bank b{color:var(--ink)}
 .install{align-self:flex-start}
+.shop{gap:10px}
+.items{display:flex;flex-direction:column;gap:8px}
+.item{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:10px;border:3px solid var(--ink);border-radius:16px;padding:8px 10px;background:#fff}
+.item .icon{font-size:28px;text-align:center}
+.item .info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.item b{font:400 18px/1 var(--display);color:var(--ink)}
+.item .now{font-size:12.5px;font-weight:700;color:var(--muted);line-height:1.25}
+.pips{display:flex;gap:4px}
+.pips i{width:12px;height:12px;border-radius:50%;border:2px solid var(--ink);background:var(--pearl)}
+.pips i.on{background:var(--sun)}
+.buy{white-space:nowrap;padding:9px 12px}
+.buy:disabled{opacity:.45;cursor:default;box-shadow:none}
 .diff{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .diff span{flex-basis:100%;font:800 12px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--lagoon)}
 #hud{position:absolute;top:max(10px,env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
@@ -131,6 +143,7 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
         <label class="btn" for="photo" tabindex="0">Add Pearl's photo</label>
         <input id="photo" type="file" accept="image/*" hidden>
         <button class="btn alt" id="lookBtn">Pearl's look</button>
+        <button class="btn go" id="shopBtn">🛍️ Shop</button>
         <button id="clearPhoto" class="link" hidden>Use cartoon Pearl</button>
       </div>
       <div class="modes">
@@ -151,6 +164,16 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
       </div>
       <p class="bank">Piggy bank: <b id="bank">0</b> pearls · Longest walk: <b id="best">0</b> m</p>
       <button class="btn go install" id="installBtn" hidden>Put Pearl's World on this phone</button>
+    </div>
+  </section>
+
+  <section id="shopPanel" class="overlay" hidden>
+    <div class="panel shop">
+      <p class="eyebrow">Spend your pearls</p>
+      <h2>Market stall</h2>
+      <p class="bank">Piggy bank: <b id="shopBank">0</b> pearls</p>
+      <div id="shopList" class="items"></div>
+      <div class="row"><button class="btn big go" id="shopDone">Done</button></div>
     </div>
   </section>
 
