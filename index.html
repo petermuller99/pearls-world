@@ -80,6 +80,7 @@ p{margin:0}
 .say{position:absolute;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(150px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 130px);background:var(--pearl);color:var(--ink);border:3px solid var(--ink);border-radius:16px;padding:7px 12px;font:400 17px/1.15 var(--display);pointer-events:none;transition:opacity .25s,transform .25s;box-shadow:0 3px 0 var(--ink)}
 .say::after{content:"";position:absolute;left:22px;bottom:-12px;border:7px solid transparent;border-top:7px solid var(--ink)}
 .say.off{transform:translateY(6px)}
+.say.dad{background:#e8f6ee}
 .say.off{opacity:0}
 .chase.close .track{animation:throb .5s ease-in-out infinite alternate}
 @keyframes throb{to{transform:scale(1.06)}}
@@ -145,6 +146,7 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
         <label class="btn" for="photo" tabindex="0">Add Pearl's photo</label>
         <input id="photo" type="file" accept="image/*" hidden>
         <button class="btn alt" id="lookBtn">Pearl's look</button>
+        <button class="btn alt" id="dadBtn">Daddy's look</button>
         <button class="btn go" id="shopBtn">🛍️ Shop</button>
         <button id="clearPhoto" class="link" hidden>Use cartoon Pearl</button>
       </div>
@@ -190,6 +192,24 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
       <p class="bank">Piggy bank: <b id="shopBank">0</b> pearls</p>
       <div id="shopList" class="items"></div>
       <div class="row"><button class="btn big go" id="shopDone">Done</button></div>
+    </div>
+  </section>
+
+  <section id="dadPanel" class="overlay" hidden>
+    <div class="panel look">
+      <h2>Daddy's look</h2>
+      <div class="row">
+        <label class="btn" for="dadPhoto" tabindex="0">Add Daddy's photo</label>
+        <input id="dadPhoto" type="file" accept="image/*" hidden>
+        <button id="clearDadPhoto" class="link" hidden>Use cartoon Daddy</button>
+      </div>
+      <div class="lrow"><h3>Skin</h3><div class="chips" id="dadSkin"></div></div>
+      <div class="lrow"><h3>Hair</h3><div class="chips" id="dadHair"></div></div>
+      <div class="lrow"><h3>Beard</h3><div class="chips" id="dadBeard"></div></div>
+      <div class="lrow"><h3>Glasses</h3><div class="chips" id="dadGlasses"></div></div>
+      <div class="lrow"><h3>Hat</h3><div class="chips" id="dadHat"></div></div>
+      <div class="lrow"><h3>Outfit</h3><div class="chips" id="dadOutfit"></div></div>
+      <div class="row"><button class="btn big go" id="dadDone">Done</button></div>
     </div>
   </section>
 

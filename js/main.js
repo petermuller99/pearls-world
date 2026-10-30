@@ -3,6 +3,7 @@
 import { THREE, $, store, damp, makePearl, applyPhoto, applyLook, makeConfetti, LOOKS, DEFAULT_LOOK } from './common.js';
 import { audio, sfx, unlock, setSfx, setMusic, playMusic, stopMusic, setMusicLevel, pauseAudio, resumeAudio } from './audio.js';
 import { createPowers, GAP_MAX, GAP_START, DIFFICULTY } from './chase.js';
+import { DAD_LOOKS, DEFAULT_DAD, applyDadLook, setDadPhoto } from './daddy.js';
 import { loadUpgrades, saveUpgrades, upgradeEffects, renderShop } from './shop.js';
 import { createRunner } from './runner.js';
 import { createHunt } from './hunt.js';
@@ -65,10 +66,13 @@ function hurt(msg, sound = sfx.hit, amount = 2) {
   if (S.gap <= 0) caught(); else banner(msg);
 }
 let sayTimer = 0;
-function mumSay(text) {
-  const el = $('mumSay'); el.textContent = '👩🏾 ' + text; el.classList.remove('off');
+// Speech bubble at the bottom left, for Mummy or Daddy.
+function say(who, text) {
+  const el = $('mumSay'); el.textContent = (who === 'dad' ? '👨🏾 ' : '👩🏾 ') + text; el.classList.remove('off');
+  el.classList.toggle('dad', who === 'dad');
   clearTimeout(sayTimer); sayTimer = setTimeout(() => el.classList.add('off'), 2200);
 }
+function mumSay(text) { say('mum', text); }
 function boost(amount, msg) { S.gap = Math.min(GAP_MAX, S.gap + amount); banner(msg); hud(); }
 function caught() {
   S.gap = 0; S.caught = true; hud();
@@ -94,7 +98,7 @@ function buy(u) {
 }
 
 const powers = createPowers(scene, P, S, { banner, hud: () => hud() });
-const ctx = { scene, P, confetti, S, hurt, boost, mumSay, banner, hud: () => hud(), camera, levelUp, powers };
+const ctx = { scene, P, confetti, S, hurt, boost, mumSay, say, banner, hud: () => hud(), camera, levelUp, powers };
 const games = { run: createRunner(ctx), dive: createHunt(ctx) };
 let game = games[store.get('pw_last', 'run')] || games.run;
 game.enter();
@@ -177,8 +181,8 @@ $('musicBtn').onclick = () => { unlock(); setMusic(!audio.musicOn); setSound(); 
 
 // Photo: centre-cropped to 200x200 and kept on this phone only.
 function showPhotoButtons() { $('clearPhoto').hidden = !store.get('pw_face', null); }
-$('photo').addEventListener('change', e => {
-  const f = e.target.files && e.target.files[0]; if (!f) return;
+function cropPhoto(input, done) {
+  const f = input.files && input.files[0]; if (!f) return;
   const fr = new FileReader();
   fr.onload = () => {
     const im = new Image();
@@ -186,28 +190,30 @@ $('photo').addEventListener('change', e => {
       const c = document.createElement('canvas'); c.width = c.height = 200;
       const k = Math.min(im.width, im.height);
       c.getContext('2d').drawImage(im, (im.width - k) / 2, (im.height - k) * .3, k, k, 0, 0, 200, 200);
-      const url = c.toDataURL('image/jpeg', .85);
-      store.set('pw_face', url); showPhotoButtons();
-      // Match her body to the skin tone in the photo.
-      applyPhoto(P, url, tone => { if (tone) { look.skin = tone; look.photoSkin = tone; saveLook(); } });
+      done(c.toDataURL('image/jpeg', .85));
     };
     im.src = fr.result;
   };
   fr.readAsDataURL(f);
-  e.target.value = '';
-});
+  input.value = '';
+}
+$('photo').addEventListener('change', e => cropPhoto(e.target, url => {
+  store.set('pw_face', url); showPhotoButtons();
+  // Match her body to the skin tone in the photo.
+  applyPhoto(P, url, tone => { if (tone) { look.skin = tone; look.photoSkin = tone; saveLook(); } });
+}));
 $('clearPhoto').onclick = () => { store.remove('pw_face'); applyPhoto(P, null); showPhotoButtons(); };
 
 /* ---------- Pearl's look ---------- */
 function saveLook() { store.set('pw_look', look); applyLook(P, look); buildLook(); }
-function chipRow(el, options, key, render) {
+function chipRow(el, options, key, render, obj = look, save = saveLook) {
   el.textContent = '';
   for (const opt of options) {
     const [value, label] = Array.isArray(opt) ? opt : [opt, opt];
     const b = document.createElement('button');
     render(b, value, label);
-    b.setAttribute('aria-pressed', String(look[key] === value));
-    b.onclick = () => { sfx.click(); look[key] = value; saveLook(); };
+    b.setAttribute('aria-pressed', String(obj[key] === value));
+    b.onclick = () => { sfx.click(); obj[key] = value; save(); };
     el.appendChild(b);
   }
 }
@@ -230,7 +236,27 @@ $('lookBtn').onclick = () => { unlock(); sfx.click(); buildLook(); $('menu').hid
 $('shopBtn').onclick = () => { unlock(); sfx.click(); showShop(); $('menu').hidden = true; $('shopPanel').hidden = false; };
 $('shopDone').onclick = () => { sfx.click(); $('shopPanel').hidden = true; $('menu').hidden = false; updateBank(); };
 $('lookDone').onclick = () => { sfx.click(); $('lookPanel').hidden = true; $('menu').hidden = false; };
-document.querySelector('label[for=photo]').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('photo').click(); } });
+
+/* ---------- Daddy's look ---------- */
+let dadLook = { ...DEFAULT_DAD, ...store.get('pw_dad_look', {}) };
+applyDadLook(dadLook);
+setDadPhoto(store.get('pw_dad_face', null));
+function saveDad() { store.set('pw_dad_look', dadLook); applyDadLook(dadLook); buildDad(); }
+function buildDad() {
+  const chip = (b, v, label) => { b.className = 'chip'; b.textContent = label; };
+  const skins = dadLook.photoSkin && !LOOKS.skin.includes(dadLook.photoSkin) ? [...LOOKS.skin, [dadLook.photoSkin, 'From photo']] : LOOKS.skin;
+  chipRow($('dadSkin'), skins, 'skin', (b, v, label) => { swatch(b, v, label === v ? 'Skin tone' : label); if (label === 'From photo') { b.className = 'sw photo'; b.textContent = 'From photo'; } }, dadLook, saveDad);
+  for (const k of ['hair', 'beard', 'glasses', 'hat', 'outfit']) chipRow($('dad' + k[0].toUpperCase() + k.slice(1)), DAD_LOOKS[k], k, chip, dadLook, saveDad);
+  $('clearDadPhoto').hidden = !store.get('pw_dad_face', null);
+}
+$('dadPhoto').addEventListener('change', e => cropPhoto(e.target, url => {
+  store.set('pw_dad_face', url);
+  setDadPhoto(url, tone => { if (tone) { dadLook.skin = tone; dadLook.photoSkin = tone; } saveDad(); });
+}));
+$('clearDadPhoto').onclick = () => { store.remove('pw_dad_face'); setDadPhoto(null); buildDad(); };
+$('dadBtn').onclick = () => { unlock(); sfx.click(); buildDad(); $('menu').hidden = true; $('dadPanel').hidden = false; };
+$('dadDone').onclick = () => { sfx.click(); $('dadPanel').hidden = true; $('menu').hidden = false; };
+for (const id of ['photo', 'dadPhoto']) document.querySelector(`label[for=${id}]`).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
 
 // Install on phone (works offline).
 let installEv = null;
@@ -290,7 +316,7 @@ function update(dt) {
   const e = S.cam * S.cam * (3 - 2 * S.cam);
   game.placeCamera(camera, e, camera.aspect > 1.2, front, behind, camTarget);
   // While the look panel is open in portrait, slide the picture up so Pearl stands above the panel.
-  S.lift = damp(S.lift || 0, (!$('lookPanel').hidden || !$('shopPanel').hidden) && camera.aspect < 1.2 ? .07 : 0, 6, dt);
+  S.lift = damp(S.lift || 0, (!$('lookPanel').hidden || !$('shopPanel').hidden || !$('dadPanel').hidden) && camera.aspect < 1.2 ? .07 : 0, 6, dt);
   const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
   if (S.lift > .002) camera.setViewOffset(w, h, 0, h * S.lift, w, h); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) $('banner').classList.add('off'); }

@@ -3,6 +3,7 @@
 import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, textSprite, COL } from './common.js';
 import { sfx } from './audio.js';
 import { makeMum, makePowerItem, animatePowerItem, POWERS } from './chase.js';
+import { createDaddy } from './daddy.js';
 
 const MILESTONES = [{ m: 10, t: 'Shiny!' }, { m: 25, t: 'Pearl collector!' }, { m: 50, t: 'Queen of the lagoon!' }, { m: 100, t: 'Ocean legend!' }, { m: 200, t: 'Richest baby in Lagos!' }];
 const X_MIN = -2.4, X_MAX = 2.4, Y_MIN = .6, Y_MAX = 4.2, HOME_Y = 1.8;
@@ -12,7 +13,7 @@ const SEG = 20;
 const LEVEL_EVERY = 25, MAX_LEVEL = 12, MAX_SPEED = 11;
 const GREETINGS = ['Hi Pearl!', 'Hello Pearl!', 'Bawo ni, Pearl!', 'Kedu, Pearl!', 'Sannu, Pearl!'];
 
-export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mumSay, camera, levelUp, powers }) {
+export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mumSay, say, camera, levelUp, powers }) {
   const world = new THREE.Group(); world.visible = false; scene.add(world);
   const sky = gradientTex([[0, '#5fd8cc'], [.5, '#178ea0'], [1, '#0b3c5d']]);
   const fog = new THREE.Fog(0x1a8fa0, 6, 44);
@@ -270,6 +271,11 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
     lines: ['Pearl, come back!', 'Not too deep o!', 'Wait for Mummy!', 'Pearl! Slow down!'],
     closeLines: ['Almost got you!', 'Come here, my fishy!', 'I see you o!'],
   });
+  // Daddy (a merman here) cheers at milestones and tosses power-ups to Pearl now and then.
+  const dad = createDaddy(world, {
+    mermaid: true, say: t => say('dad', t), kinds: POWERS,
+    give(kind, from) { addPower(kind, st.x, st.y, st.z - 7 - st.speed * .6); const it = items[items.length - 1]; it.toss = { t: 0, from }; it.m.position.copy(from); },
+  });
   const HITTABLE = { jelly: 1, puffer: 1, octo: 1, ink: 1 };
   function knockOut(i) {
     const it = items[i];
@@ -305,7 +311,7 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
     start() {
       clearItems();
       Object.assign(st, { x: 0, y: HOME_Y, vx: 0, vy: 0, speed: 4, ms: 0, nextSpawn: st.z - 14, wave: 0, turn: 0, waveT: 0, time: 0, tx: null, ty: null, level: 1, rows: 0 });
-      mum.reset(st.x, st.y, st.z);
+      mum.reset(st.x, st.y, st.z); dad.reset();
       sfx.splash();
     },
     scoreText() { return `${S.pearls} pearls · Level ${st.level}`; },
@@ -353,12 +359,14 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
       P.root.rotation.set(playing ? THREE.MathUtils.clamp(st.vy * .12, -.4, .4) * (1 - st.turn) : 0, 0, playing ? THREE.MathUtils.clamp(-st.vx * .1, -.35, .35) : 0);
       P.shadow.position.y = .02 - st.y; P.shadow.scale.setScalar(Math.max(.2, .55 - st.y * .07));
       mum.update(dt, { px: st.x, py: st.y, pz: st.z, gap: S.gap, mode: S.mode, caught: S.caught, t: S.t, speed: st.speed });
+      dad.update(dt, { px: st.x, py: st.y, pz: st.z, speed: st.speed, gameMode: S.mode, caught: S.caught, time: S.t, diff: S.diff });
 
       if (playing) {
         const next = MILESTONES[st.ms];
         if (next && S.pearls >= next.m) {
           st.ms++; banner(next.t); sfx.milestone(); confetti.burst(tmpV.set(st.x, st.y + .8, st.z - 1), 60, 2);
           st.waveT = 1.8;
+          dad.cheer(st.x, st.y, st.z, 14 + st.speed * 1.5);
           // Shoo the jellyfish ahead away while she turns to wave.
           for (const it of items) if (HITTABLE[it.kind] && it.kind !== 'ink' && !it.fly && it.m.position.z < st.z && it.m.position.z > st.z - st.speed * 3 - 6) it.fly = 1;
         }
@@ -410,7 +418,13 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
             it.fly = 1; hurt(S.gap < 4 ? 'Boop! Mummy is right behind you' : 'Boop! Silly jellyfish', sfx.jelly, 2);
           }
         } else if (POWERS.includes(it.kind)) {
-          animatePowerItem(it.m, S.t, dt); it.m.position.y = it.y + Math.sin(S.t * 2 + it.z) * .1;
+          animatePowerItem(it.m, S.t, dt);
+          if (it.toss) {
+            const k = Math.min(1, (it.toss.t += dt / .7)), f = it.toss.from;
+            it.m.position.set(lerp(f.x, it.x, k), lerp(f.y, it.y, k) + Math.sin(k * Math.PI) * 1.2, lerp(f.z, it.z, k));
+            if (k >= 1) delete it.toss;
+            continue;
+          } it.m.position.y = it.y + Math.sin(S.t * 2 + it.z) * .1;
           if (playing && Math.abs(it.z - st.z) < .7 && Math.hypot(it.x - cx, it.m.position.y - cy) < .75) { removeItem(i); powers.grant(it.kind); }
         } else if (it.kind === 'puffer' || it.kind === 'octo') {
           if (it.fly > 0) {
@@ -488,11 +502,11 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
     },
     bubbleY: .25,
     placeCamera(cam, e, wide, frontV, behindV, look) {
-      frontV.set(st.x - .8, st.y + .3, st.z - 3.8);
+      frontV.set(st.x - (wide ? .6 : .25), st.y + .35, st.z - (wide ? 5.8 : 4.7));
       behindV.set(st.x * .6, st.y * .5 + 2.7, st.z + 5);
       cam.position.lerpVectors(frontV, behindV, e);
       cam.position.x += Math.sin(e * Math.PI) * 2.5;
-      look.set(lerp(st.x - (wide ? 1.3 : 0), st.x * .45, e), lerp(st.y + (wide ? .3 : -.55), st.y * .6 + .2, e), lerp(st.z, st.z - 6, e));
+      look.set(lerp(st.x - (wide ? 2.3 : 0), st.x * .45, e), lerp(st.y + (wide ? .3 : -.55), st.y * .6 + .2, e), lerp(st.z, st.z - 6, e));
       cam.lookAt(look);
     },
     pointerDown(e) { aim(e); },

@@ -182,5 +182,8 @@ export const sfx = {
   crow: fx(t => { for (const d of [0, .22]) { noise(t + d, .14, .2, sfxBus, 'bandpass', 1300, 3); osc('square', 420, t + d, .12, .04, sfxBus, { to: 300, lp: 1500 }); } }),
   puffer: fx(t => { osc('sine', 200, t, .25, .16, sfxBus, { to: 520, slide: .2 }); }),
   ink: fx(t => { noise(t, .2, .2, sfxBus, 'lowpass', 800); osc('sine', 300, t, .15, .1, sfxBus, { to: 120 }); }),
+  // Daddy cheering: a whistle and a happy rising "yay".
+  cheer: fx(t => { osc('sine', 1800, t, .12, .08, sfxBus, { to: 2400, slide: .1 }); osc('sine', 2400, t + .14, .2, .08, sfxBus, { to: 1700 }); [523, 659, 784].forEach((f, i) => osc('triangle', f, t + .3 + i * .07, .2, .1, sfxBus)); noise(t + .3, .4, .06, sfxBus, 'bandpass', 2500, .5); }),
+  toss: fx(t => { osc('sine', 300, t, .3, .1, sfxBus, { to: 900, slide: .25 }); noise(t, .25, .08, sfxBus, 'bandpass', 1500, 1); }),
   fish: fx(t => { osc('sine', 1200, t, .06, .08, sfxBus, { to: 1700 }); osc('sine', 1500, t + .08, .08, .08, sfxBus, { to: 2100 }); }),
 };
