@@ -212,5 +212,10 @@ export const sfx = {
     s.type = 'sawtooth'; s.frequency.setValueAtTime(rand(95, 130), t); s.frequency.linearRampToValueAtTime(rand(70, 90), t + .8);
     f.type = 'bandpass'; f.frequency.value = 500; f.Q.value = 3; env(g, t, .15, .09, .8); s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t + 1); }),
   doorBang: fx(t => { osc('sine', 90, t, .2, .3, sfxBus, { to: 50 }); noise(t, .12, .2, sfxBus, 'lowpass', 600); }),
+  roar: fx(t => { const s = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
+    s.type = 'sawtooth'; s.frequency.setValueAtTime(140, t); s.frequency.exponentialRampToValueAtTime(55, t + 1.2);
+    f.type = 'lowpass'; f.frequency.value = 900; env(g, t, .08, .22, 1.3); s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t + 1.5);
+    noise(t, 1, .12, sfxBus, 'bandpass', 400, .7); }),
+  stomp: fx(t => { osc('sine', 70, t, .45, .5, sfxBus, { to: 30, slide: .4 }); noise(t, .3, .25, sfxBus, 'lowpass', 300); }),
   fish: fx(t => { osc('sine', 1200, t, .06, .08, sfxBus, { to: 1700 }); osc('sine', 1500, t + .08, .08, .08, sfxBus, { to: 2100 }); }),
 };
