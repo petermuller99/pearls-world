@@ -1,6 +1,6 @@
 // All sound in Pearl's World is made live with WebAudio: two original songs and the
 // sound effects. Nothing to download, so it works offline.
-import { store } from './common.js';
+import { store, rand } from './common.js';
 
 export const audio = {
   sfxOn: !store.get('pw_mute', false),
@@ -117,7 +117,24 @@ const LAGOON = {
     if (lv >= 4 && s % 4 === 3) osc('sine', mtof(ch[2] + 24), t, .08, .05, musicBus, { to: mtof(ch[2] + 31), slide: .06 });
   },
 };
-const SONGS = { run: SUNSET, dive: LAGOON };
+// Zombie Jollof (Zombie Defence): spooky but funky, in A minor over Am - F - C - E.
+const ZOMBIE = {
+  bpm: lv => 116 + Math.min(lv - 1, 8) * 3,
+  roots: [45, 41, 48, 40],
+  chords: [[69, 72, 76], [65, 69, 72], [67, 72, 76], [68, 71, 76]],
+  play(step, t, sd, lv) {
+    const s = step % 16, b = Math.floor(step / 16) % 4, ch = this.chords[b];
+    if (s === 0 || s === 6 || s === 10) I.kick(t);
+    if (s === 4 || s === 12) I.clap(t);
+    if (s % 2 === 0) I.shaker(t, s % 4 ? .6 : 1);
+    const bass = { 0: 0, 3: 12, 6: 0, 8: 7, 10: 12, 14: 7 };
+    if (bass[s] != null) I.bass(t, this.roots[b] + bass[s], sd * 1.4);
+    if (s === 0) for (const m of ch) I.pad(t, m - 12, sd * 15, .8);
+    if (s % 4 === 2) I.kalimba(t, ch[(s / 4 | 0) % 3] + 12, .7, true);
+    if (lv >= 3 && (s === 7 || s === 15)) I.talk(t, 52, .7);
+  },
+};
+const SONGS = { run: SUNSET, dive: LAGOON, zombie: ZOMBIE };
 
 let song = null, step = 0, nextT = 0, timer = null, level = 1;
 export function playMusic(name) {
@@ -185,5 +202,15 @@ export const sfx = {
   // Daddy cheering: a whistle and a happy rising "yay".
   cheer: fx(t => { osc('sine', 1800, t, .12, .08, sfxBus, { to: 2400, slide: .1 }); osc('sine', 2400, t + .14, .2, .08, sfxBus, { to: 1700 }); [523, 659, 784].forEach((f, i) => osc('triangle', f, t + .3 + i * .07, .2, .1, sfxBus)); noise(t + .3, .4, .06, sfxBus, 'bandpass', 2500, .5); }),
   toss: fx(t => { osc('sine', 300, t, .3, .1, sfxBus, { to: 900, slide: .25 }); noise(t, .25, .08, sfxBus, 'bandpass', 1500, 1); }),
+  // Zombie Defence
+  bubbleShot: fx(t => { osc('sine', 700, t, .08, .07, sfxBus, { to: 1300, slide: .06 }); }),
+  slipper: fx(t => { noise(t, .12, .2, sfxBus, 'bandpass', 900, 1); osc('triangle', 220, t, .1, .08, sfxBus, { to: 140 }); }),
+  cannon: fx(t => { osc('sine', 120, t, .35, .35, sfxBus, { to: 45, slide: .3 }); noise(t, .4, .25, sfxBus, 'lowpass', 900); }),
+  zHit: fx(t => { osc('square', 300, t, .06, .05, sfxBus, { to: 180, lp: 1500 }); }),
+  zPop: fx(t => { noise(t, .2, .25, sfxBus, 'bandpass', 2000, .8); [660, 990, 1320].forEach((f, i) => osc('sine', f, t + i * .05, .1, .08, sfxBus)); }),
+  groan: fx(t => { const s = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
+    s.type = 'sawtooth'; s.frequency.setValueAtTime(rand(95, 130), t); s.frequency.linearRampToValueAtTime(rand(70, 90), t + .8);
+    f.type = 'bandpass'; f.frequency.value = 500; f.Q.value = 3; env(g, t, .15, .09, .8); s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t + 1); }),
+  doorBang: fx(t => { osc('sine', 90, t, .2, .3, sfxBus, { to: 50 }); noise(t, .12, .2, sfxBus, 'lowpass', 600); }),
   fish: fx(t => { osc('sine', 1200, t, .06, .08, sfxBus, { to: 1700 }); osc('sine', 1500, t + .08, .08, .08, sfxBus, { to: 2100 }); }),
 };

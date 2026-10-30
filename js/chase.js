@@ -50,7 +50,8 @@ export function applyMumLook(look, list = mumFigures) {
 export function setMumPhoto(url, onSkin) { mumFigures.forEach((F, i) => applyPhoto(F, url, i ? null : onSkin)); }
 
 // Mummy: a taller version of Pearl in a long ankara dress and gele.
-export function makeMum(parent, { mermaid = false, lines, closeLines, onSay }) {
+// Mummy's figure on its own (her look applied); also used on the porch in Zombie Defence.
+export function makeMumFigure() {
   const F = makePearl();
   F.root.scale.setScalar(1.3);
   const studs = [];
@@ -82,6 +83,11 @@ export function makeMum(parent, { mermaid = false, lines, closeLines, onSay }) {
   F.legs.forEach(l => { l.userData.sock.visible = false; });
   // A long iro-style dress down to her ankles.
   F.dress.scale.set(1.05, 1.9, 1.05); F.dress.position.y = .02;
+  return F;
+}
+
+export function makeMum(parent, { mermaid = false, lines, closeLines, onSay }) {
+  const F = makeMumFigure();
   if (mermaid) setMermaid(F, true);
   parent.add(F.root);
 
