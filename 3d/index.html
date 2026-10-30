@@ -1,102 +1,10 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>First Steps 3D</title>
-<meta name="description" content="Pearl's World in 3D: a first look.">
-<meta name="theme-color" content="#24163d">
-<link rel="manifest" href="../manifest.webmanifest">
-<link rel="icon" href="../icons/icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Nunito:wght@600;800&display=swap">
-<style>
-/* Same toy-card look as the 2D game, floating over a full-screen WebGL scene */
-:root{
-  --ink:#24163d;--pearl:#fff8f0;--coral:#ff6b4a;--lagoon:#0f8a8f;--sun:#ffc93c;--blush:#ff5c8a;--muted:#6b5a80;
-  --display:'Bagel Fat One','Arial Rounded MT Bold','Trebuchet MS',system-ui,sans-serif;
-  --body:'Nunito','Segoe UI',system-ui,sans-serif;
-  color-scheme:light;
-}
-html,body{height:100%;margin:0}
-[hidden]{display:none!important}
-body{background:var(--ink);color:var(--ink);font-family:var(--body);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
-#app{position:relative;height:100%;overflow:hidden}
-#c{display:block;width:100%;height:100%;touch-action:none}
-.overlay{position:absolute;inset:0;display:flex;overflow-y:auto;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:linear-gradient(rgba(36,22,61,0) 30%,rgba(36,22,61,.35))}
-.panel{margin:auto auto 8px;width:100%;max-width:460px;background:var(--pearl);border-radius:28px;padding:22px 22px 20px;box-shadow:0 8px 0 rgba(36,22,61,.35);display:flex;flex-direction:column;gap:14px}
-.eyebrow{margin:0;font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--lagoon)}
-h1,h2{margin:0;font-family:var(--display);font-weight:400;line-height:.95;text-wrap:balance;color:var(--coral);text-shadow:3px 3px 0 var(--ink)}
-h1{font-size:clamp(40px,12vw,60px)}
-h2{font-size:clamp(32px,9vw,46px)}
-p{margin:0}
-.txt{font-size:16px;font-weight:600;line-height:1.45}
-.small{font-size:13px;font-weight:700;color:var(--muted)}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.btn{font:800 17px/1 var(--body);border:3px solid var(--ink);border-radius:999px;padding:13px 22px;background:var(--sun);color:var(--ink);cursor:pointer;box-shadow:0 4px 0 var(--ink);text-decoration:none;display:inline-block}
-.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
-.btn.alt{background:var(--pearl)}
-.btn.go{background:var(--coral);color:var(--pearl)}
-#hud{position:absolute;top:max(10px,env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
-.stats{display:flex;flex-direction:column;gap:4px;font:400 22px/1 var(--display);color:var(--pearl);text-shadow:2px 2px 0 var(--ink);font-variant-numeric:tabular-nums}
-#hearts{color:var(--blush);letter-spacing:2px}
-.ibs{display:flex;gap:8px;pointer-events:auto}
-.ib{width:44px;height:44px;border-radius:50%;border:3px solid var(--ink);background:var(--pearl);color:var(--ink);font:800 16px var(--body);cursor:pointer}
-#banner{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top,0px)) + 70px);transform:translateX(-50%);background:var(--pearl);border:3px solid var(--ink);border-radius:999px;padding:10px 20px;font:400 clamp(18px,5.5vw,26px)/1.1 var(--display);color:var(--coral);white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;pointer-events:none;transition:opacity .3s,transform .3s}
-#banner.off{opacity:0;transform:translateX(-50%) translateY(-10px)}
-#hint{position:absolute;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:rgba(36,22,61,.75);color:var(--pearl);border-radius:999px;padding:8px 16px;font:800 14px var(--body);white-space:nowrap;pointer-events:none;transition:opacity .6s}
-#hint.off{opacity:0}
-button:focus-visible,a:focus-visible{outline:3px solid var(--blush);outline-offset:3px}
-@media (min-aspect-ratio:6/5){.overlay{background:linear-gradient(90deg,rgba(36,22,61,0) 40%,rgba(36,22,61,.35))}.panel{margin:auto 0 auto auto;max-width:420px}}
-@media (prefers-reduced-motion:reduce){#banner,#hint{transition:none}}
-</style>
-
-<div id="app">
-  <canvas id="c" aria-label="Pearl's World 3D game area"></canvas>
-
-  <div id="hud" hidden>
-    <div class="stats"><span id="hearts" aria-label="Hearts">♥♥♥</span><span id="score">0 pearls · 0 m</span></div>
-    <div class="ibs">
-      <button id="soundBtn" class="ib" aria-label="Sound on" aria-pressed="true">♪</button>
-      <button id="homeBtn" class="ib" aria-label="Back to menu">✕</button>
-    </div>
-  </div>
-  <div id="banner" class="off" role="status" aria-live="polite"></div>
-  <div id="hint" class="off">Swipe to change lanes. Tap to jump.</div>
-
-  <section id="menu" class="overlay">
-    <div class="panel">
-      <p class="eyebrow">New: a first look at 3D</p>
-      <h1>First Steps 3D</h1>
-      <p class="txt">Pearl crawls, toddles and runs along the Lekki-Ikoyi Link Bridge at sunset. Swipe left or right to change lanes, tap to jump.</p>
-      <div class="row">
-        <button class="btn go" id="playBtn">Let's go, Pearl!</button>
-        <a class="btn alt" href="../">Back to Pearl's World</a>
-      </div>
-      <p class="small">Pearls and photo are shared with the 2D game.</p>
-    </div>
-  </section>
-
-  <section id="over" class="overlay" hidden>
-    <div class="panel">
-      <p class="eyebrow" id="overEyebrow">Walk complete</p>
-      <h2 id="overTitle">Well done, Pearl!</h2>
-      <p class="txt" id="overText"></p>
-      <div class="row">
-        <button class="btn go" id="againBtn">Play again</button>
-        <button class="btn alt" id="menuBtn">Menu</button>
-      </div>
-    </div>
-  </section>
-
-  <section id="nogl" class="overlay" hidden>
-    <div class="panel">
-      <h2>Oh no!</h2>
-      <p class="txt">This phone's browser can't show 3D right now. The 2D game still works.</p>
-      <div class="row"><a class="btn" href="../">Back to Pearl's World</a></div>
-    </div>
-  </section>
-</div>
-
-<script type="module" src="game.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pearl's World</title>
+<meta http-equiv="refresh" content="0; url=../">
+<link rel="canonical" href="../">
+<style>html,body{margin:0;height:100%;background:#24163d}</style>
+<script>location.replace('../')</script>
 </html>

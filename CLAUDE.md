@@ -2,31 +2,25 @@
 
 A game I'm building for my baby daughter, Pearl. She's the main character. I'm her dad, Oluwashina, based in Lagos, Nigeria. This is a personal project made with love, so care about the small details.
 
-## What exists today (v1)
+## What exists today
 
-`index.html` is a single self-contained file: HTML + CSS + vanilla JS drawing on one `<canvas>`. No build step, no dependencies except Google Fonts (Bagel Fat One, Nunito).
+The main game is **3D** (Three.js r170, vendored in `vendor/` so it works offline). Plain ES modules, no build step:
 
-Two mini games:
-
-1. **First Steps** (runner): Pearl crawls, then toddles, then runs across a Lagos sunset scene (skyline, Lekki-Ikoyi Link Bridge with a Nigerian flag, yellow danfo bus, palm trees, beach). Tap to jump, double jump allowed. Obstacles: toy ABC blocks, beach balls. Pickups: pearls, baby bottles (+1 heart). 3 hearts. Distance milestones trigger banners and confetti: first smile, first word "Dada", first tooth, first steps (switches to toddle), off she runs (switches to run), 1st birthday, and more.
-2. **Pearl Hunt** (underwater): Pearl is a little mermaid. Hold and drag (or arrow keys) to swim. Collect pearls, open oysters (+3), avoid jellyfish. Some fish say "Hi Pearl!". Pearl-count milestones.
+- `index.html`: page, CSS and menu (photo button, two game cards, piggy bank, "Classic 2D version" link, install button), HUD, banner, end card.
+- `js/main.js`: renderer, camera, game flow shared by both games (hearts, pearls, `hurt()`, banner, end card, piggy bank), input routing, render loop with automatic quality step-down, menu wiring, photo upload.
+- `js/common.js`: helpers, canvas textures, shared materials, **Pearl** (`makePearl`, `posePearl`, `setMermaid`, `applyPhoto`), confetti, sound (`sfx`), `textSprite` for speech bubbles.
+- `js/runner.js`: **First Steps**. Lekki-Ikoyi Link Bridge at sunset (walkway with 3 lanes, danfos and keke on the roads, cable-stayed pylons with waving Nigerian flags, lagoon, palms, skyline). Swipe to change lanes, tap or swipe up to jump (double jump). Toy blocks and beach balls, pearls (rows and arcs over obstacles), bottles (+1 heart). Distance milestones switch crawl, toddle, run.
+- `js/hunt.js`: **Pearl Hunt**. Pearl is a mermaid swimming forward through the lagoon (sand, sea grass, coral, rocks, starfish, light rays, bubbles). Touch where to swim: the touch is projected onto the water in front of her and she glides there (arrow keys too). Pearl trails and rings, oysters on the floor that open and close (+3 if she reaches one while open), friendly smiling jellyfish (lose a heart), fish that greet her ("Hi Pearl!", "Bawo ni, Pearl!", "Kedu, Pearl!", "Sannu, Pearl!"). Pearl-count milestones.
+- Each game module exposes the same interface (`enter/exit/start/update/placeCamera/scoreText/finish` + pointer and key handlers), so adding a level means adding a module.
+- Camera sits in front of Pearl on the menu and end card (so her face shows) and behind her while playing. At each milestone she turns round and waves while the way ahead is cleared.
+- `classic/`: the original 2D canvas game, kept as "Classic 2D version". `3d/` redirects to the main page (old link).
+- `?debug` exposes `window.__pw` so tests can fast-forward. Headless tests render 3D in software at about 5 fps, so check real smoothness on a phone.
 
 Shared features:
-- Photo upload: center-cropped to 200x200 JPEG, stored in localStorage (`pw_face`), drawn as a circular head with a pink bow. Falls back to a drawn cartoon Pearl (brown skin, puff hair, bow).
-- Piggy bank: total pearls across all games (`pw_bank`), best walk distance (`pw_best`), mute (`pw_mute`).
+- Photo upload: center-cropped to 200x200 JPEG, stored in localStorage (`pw_face`), shown on the 3D Pearl's face. Falls back to the cartoon face.
+- Storage: piggy bank `pw_bank`, best walk `pw_best`, mute `pw_mute`, last game shown on the menu `pw_last`. Shared with the classic game.
 - WebAudio beeps for sound effects.
-- Installable on phones (PWA): `manifest.webmanifest`, `sw.js` (offline cache), `icons/` (cartoon Pearl head on a sunset). Menu shows a "Put Pearl's World on this phone" button when Chrome offers install. When adding new files the game needs offline, list them in `sw.js` and bump its `VERSION`.
-- Logical coordinate system: `S = min(h/400, w/460)`, world is `VW x VH` logical units. Ground at `VH - 60`.
-
-## 3D prototype (`3d/`)
-
-`3d/index.html` + `3d/game.js`: First Steps in 3D with Three.js (r170, vendored at `3d/vendor/three.module.min.js` so it works offline; no build step). Linked from the main menu as "New: try First Steps in 3D".
-- Pearl and the world are built from simple shapes and canvas textures (no model files): toy-style Pearl with puff buns, bow and ankara dress, crawl/toddle/run poses animated in code. Uses the saved photo (`pw_face`) on her face, and shares `pw_bank`, `pw_best`, `pw_mute` with the 2D game.
-- Lekki-Ikoyi Link Bridge: sandy walkway with 3 lanes for Pearl, roads either side with danfos and keke, cable-stayed pylons with waving Nigerian flags, lagoon, palms, skyline, sunset.
-- Controls: swipe left/right to change lanes, tap or swipe up to jump (double jump), arrow keys and space on desktop.
-- Camera sits in front of Pearl on the menu and end card (so her face shows) and behind her while playing. At each milestone she turns round and waves while the path ahead is cleared.
-- Drops pixel ratio automatically if the phone struggles. `?debug` exposes `window.__pw` so tests can fast-forward.
-- Headless tests render 3D in software at about 5 fps, so check real smoothness on a phone.
+- Installable on phones (PWA): `manifest.webmanifest`, `sw.js` (offline cache), `icons/`. When adding files the game needs offline, list them in `sw.js` and bump its `VERSION`.
 
 ## Design direction
 
@@ -38,8 +32,8 @@ Shared features:
 
 ## Roadmap ideas (my priorities, in rough order)
 
-1. Split into a proper project (Vite or plain modules): scenes, entities, assets, audio.
-2. Better art: proper sprite sheets for Pearl (crawl, toddle, run, swim), parallax layers as images.
+1. ~~Split into a proper project (Vite or plain modules).~~ Done for the 3D game (plain ES modules).
+2. Better art: a nicer 3D Pearl model (AI generator or artist) could replace the code-built one later.
 3. Record real sounds: my voice saying "Go Pearl!", her laughs, as pickup and milestone sounds.
 4. Milestone editor: so I can add her real milestones with dates as they happen (a living baby book).
 5. More levels: grandma's house, the market, Lekki Conservation Centre canopy walk, Christmas level.
