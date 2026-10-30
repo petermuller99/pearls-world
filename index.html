@@ -49,7 +49,7 @@ p{margin:0}
 .mode:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
 .mode.run{background:var(--coral)}
 .mode.dive{background:var(--lagoon)}
-.mode.zombie{background:#5a3f8f;grid-column:1/-1}
+.mode.zombie{background:#5a3f8f}
 .house{display:flex;align-items:center;gap:6px;width:min(40vw,170px);text-shadow:none;font-size:20px}
 .house .track{flex:1;height:14px;border-radius:999px;background:rgba(36,22,61,.5);border:3px solid var(--ink);box-shadow:0 2px 0 var(--ink);overflow:hidden;display:block}
 .house .fill{display:block;height:100%;width:100%;background:linear-gradient(90deg,#7fe38a,#ffc93c);transition:width .2s}
@@ -78,6 +78,20 @@ p{margin:0}
 .bank{font-size:14px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
 .bank b{color:var(--ink)}
 .install{align-self:flex-start}
+.menu{gap:10px;padding:16px 12px 14px}
+.menu h1{font-size:clamp(32px,10vw,46px)}
+.tools{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.tool{font:800 11.5px/1 var(--body);border:3px solid var(--ink);border-radius:999px;padding:7px 5px;background:var(--pearl);color:var(--ink);cursor:pointer;box-shadow:0 3px 0 var(--ink);white-space:nowrap}
+.tool.shop{background:var(--coral);color:var(--pearl)}
+.tool.icon{font-size:16px;padding:5px 6px}
+.tool:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.menu .modes{grid-template-columns:repeat(3,1fr);gap:8px}
+.menu .mode{align-items:center;text-align:center;padding:10px 6px;gap:2px;border-radius:18px}
+.menu .mode .mi{font-size:30px;line-height:1.1}
+.menu .mode .mt{font-size:clamp(15px,4.4vw,19px);line-height:1.05}
+.menu .mode .md{font-size:11.5px;opacity:.9}
+.menu .bank{font-size:13px}
+.menu .diff .chip{padding:6px 10px}
 .steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px;font-size:16px;font-weight:600;line-height:1.4}
 .steps .share{vertical-align:-5px;background:#fff;border:2px solid var(--ink);border-radius:8px;padding:2px}
 .shop{gap:10px}
@@ -176,43 +190,43 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
   <div id="hint" class="off"></div>
 
   <section id="menu" class="overlay">
-    <div class="panel">
+    <div class="panel menu">
       <p class="eyebrow">Made by Daddy, for Pearl</p>
       <h1>Pearl's World</h1>
-      <div class="row">
-        <button class="btn alt" id="lookBtn">Pearl's look</button>
-        <button class="btn alt" id="mumBtn">Mummy's look</button>
-        <button class="btn alt" id="dadBtn">Daddy's look</button>
-        <button class="btn go" id="shopBtn">🛍️ Shop</button>
+      <div class="tools">
+        <button class="tool" id="lookBtn" aria-label="Pearl's look">👶🏾 Pearl</button>
+        <button class="tool" id="mumBtn" aria-label="Mummy's look">👩🏾 Mummy</button>
+        <button class="tool" id="dadBtn" aria-label="Daddy's look">👨🏾 Daddy</button>
+        <button class="tool shop icon" id="shopBtn" aria-label="Shop" title="Shop">🛍️</button>
+        <button class="tool icon" id="setBtn" aria-label="Settings" title="Settings">⚙️</button>
       </div>
       <div class="modes">
-        <button class="mode run" id="playRun">
-          <span class="mt">First Steps</span>
-          <span class="md">Crawl, toddle and run across the Lekki bridge. Swipe and tap.</span>
-        </button>
-        <button class="mode dive" id="playDive">
-          <span class="mt">Pearl Hunt</span>
-          <span class="md">Swim the lagoon as a little mermaid. Touch where to swim.</span>
-        </button>
-        <button class="mode zombie" id="playZombie">
-          <span class="mt">Zombie Defence</span>
-          <span class="md">Silly zombies want Pearl! Defend the house from every side: shoot, switch shooters, and plant pepper shooters, mango lobbers and more.</span>
-        </button>
+        <button class="mode run" id="playRun"><span class="mi" aria-hidden="true">🏃🏾‍♀️</span><span class="mt">First Steps</span><span class="md">Run and jump</span></button>
+        <button class="mode dive" id="playDive"><span class="mi" aria-hidden="true">🧜🏾‍♀️</span><span class="mt">Pearl Hunt</span><span class="md">Swim and collect</span></button>
+        <button class="mode zombie" id="playZombie"><span class="mi" aria-hidden="true">🧟</span><span class="mt">Zombie Defence</span><span class="md">Shoot and plant</span></button>
       </div>
       <div class="diff" id="difficulty" role="group" aria-label="Difficulty">
-        <span>Difficulty</span>
         <button class="chip" data-d="easy" aria-pressed="false">🍼 Easy</button>
         <button class="chip" data-d="normal" aria-pressed="true">🙂 Normal</button>
         <button class="chip" data-d="hard" aria-pressed="false">🔥 Hard</button>
       </div>
+      <p class="bank">🐷 <b id="bank">0</b> pearls · 👣 <b id="best">0</b> m · 🧟 wave <b id="zbest">0</b></p>
+      <button class="btn go install" id="installBtn" hidden>Put Pearl's World on this phone</button>
+    </div>
+  </section>
+
+  <section id="setPanel" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Settings</p>
+      <h2>Settings</h2>
       <div class="diff" id="gfx" role="group" aria-label="Graphics">
         <span>Graphics</span>
         <button class="chip" data-g="auto" aria-pressed="true">✨ Auto</button>
         <button class="chip" data-g="low" aria-pressed="false">🔋 Low</button>
         <button class="chip" data-g="high" aria-pressed="false">💎 High</button>
       </div>
-      <p class="bank">Piggy bank: <b id="bank">0</b> pearls · Longest walk: <b id="best">0</b> m · Best wave: <b id="zbest">0</b></p>
-      <button class="btn go install" id="installBtn" hidden>Put Pearl's World on this phone</button>
+      <p class="small">Auto starts on High and turns effects off if your phone struggles. Low is best for older phones.</p>
+      <div class="row"><button class="btn big go" id="setDone">Done</button></div>
     </div>
   </section>
 

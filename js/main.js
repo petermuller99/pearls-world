@@ -274,6 +274,8 @@ function buildLook() {
   chipRow($('lookOutfit'), Object.keys(LOOKS.outfit), 'outfit', (b, v) => { swatch(b, LOOKS.outfit[v][0], v + ' ankara'); b.style.background = `radial-gradient(circle at 50% 50%, ${LOOKS.outfit[v][2]} 0 4px, ${LOOKS.outfit[v][1]} 4px 9px, ${LOOKS.outfit[v][0]} 9px)`; });
 }
 $('lookBtn').onclick = () => { unlock(); sfx.click(); buildLook(); $('menu').hidden = true; $('lookPanel').hidden = false; };
+$('setBtn').onclick = () => { unlock(); sfx.click(); $('menu').hidden = true; $('setPanel').hidden = false; };
+$('setDone').onclick = () => { sfx.click(); $('setPanel').hidden = true; $('menu').hidden = false; };
 $('shopBtn').onclick = () => { unlock(); sfx.click(); showShop(); $('menu').hidden = true; $('shopPanel').hidden = false; };
 $('shopDone').onclick = () => { sfx.click(); $('shopPanel').hidden = true; $('menu').hidden = false; updateBank(); };
 $('lookDone').onclick = () => { sfx.click(); $('lookPanel').hidden = true; $('menu').hidden = false; };

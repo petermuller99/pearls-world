@@ -13,7 +13,7 @@ import { makeDaddyFigure } from './daddy.js';
 const PORCH_Z = -1.7, DOOR_Z = -2.9, GATE_Z = -14, SIDE_X = 14, SIDE_Z = -7;
 const WHO = {
   pearl: { name: 'Pearl', weapon: 'Bubble blaster', x: 0, eye: 1.05, rate: .17, dmg: 1, speed: 28, shot: 'bubble' },
-  mum: { name: 'Mummy', weapon: 'Slipper toss', x: -2.3, eye: 1.85, rate: .42, dmg: 3, speed: 24, shot: 'slipper' },
+  mum: { name: 'Mummy', weapon: 'Slipper toss', x: -2.3, eye: 1.85, rate: .42, dmg: 3, speed: 24, shot: 'slipper', grav: 6 },
   dad: { name: 'Daddy', weapon: 'Fireball cannon', x: 2.3, eye: 2, rate: .8, dmg: 6, speed: 22, shot: 'fire', splash: 1.8 },
 };
 const TYPES = {
@@ -33,7 +33,7 @@ const CASH = { walker: 10, runner: 8, big: 30, okada: 20, helmet: 15, oga: 75, d
 // Defenders you plant in the yard with naira. `range` in metres, `rate` in seconds.
 export const DEFS = {
   pepper: { icon: '🌶️', name: 'Pepper Shooter', cost: 125, hp: 12, range: 13, rate: 1.3, dmg: 1.5, shot: 'pepper', speed: 20 },
-  mango: { icon: '🥭', name: 'Mango Lobber', cost: 175, hp: 12, range: 17, rate: 3, dmg: 3, shot: 'mango', speed: 13, splash: 2.2, arc: true },
+  mango: { icon: '🥭', name: 'Mango Lobber', cost: 175, hp: 12, range: 17, rate: 3, dmg: 3, shot: 'mango', speed: 13, splash: 2.2, grav: 9 },
   water: { icon: '💧', name: 'Pure Water Sprinkler', cost: 100, hp: 10, range: 4 },
   block: { icon: '🧱', name: 'Cement Block', cost: 50, hp: 45 },
   banger: { icon: '🧨', name: 'Banger', cost: 50, hp: 1, range: 1.2, blast: 3, dmg: 25 },
@@ -264,15 +264,12 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     const g = makeShot(W.shot);
     g.position.copy(from);
     let v;
-    if (W.arc) {
-      // Lob: a ballistic arc that lands on the target.
-      const d = to.clone().sub(from), T = Math.max(.5, Math.hypot(d.x, d.z) / W.speed);
-      v = new THREE.Vector3(d.x / T, d.y / T + 4.5 * T, d.z / T);
-    } else {
-      v = to.clone().sub(from).normalize().multiplyScalar(W.speed);
-      if (W.shot === 'slipper') v.y += 2.2;
-    }
-    shots.push({ g, v, life: W.arc ? 4 : 2.2, W, mul });
+    if (W.grav) {
+      // Thrown or lobbed: a ballistic arc that lands exactly on the target.
+      const d = to.clone().sub(from), T = Math.max(.25, Math.hypot(d.x, d.z) / W.speed);
+      v = new THREE.Vector3(d.x / T, d.y / T + .5 * W.grav * T, d.z / T);
+    } else v = to.clone().sub(from).normalize().multiplyScalar(W.speed);
+    shots.push({ g, v, life: W.grav ? 4 : 2.2, W, mul });
     ({ bubble: sfx.bubbleShot, slipper: sfx.slipper, fire: sfx.cannon, pepper: sfx.bubbleShot, mango: sfx.slipper })[W.shot]();
   }
 
@@ -357,6 +354,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
   // A shooter's eye position in the world.
   function eyeOf(who, out) { const W = WHO[who]; return out.set(W.x, W.eye, PORCH_Z); }
   // Picks the zombie closest to the aim ray, so taps don't have to be pixel-perfect.
+  // Generous for fingers: anything within about a body-width of the tap line counts.
   function assist(origin, dir) {
     let best = null, bd = 1e9;
     for (const z of zombies) {
@@ -364,9 +362,31 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
       const c = tmpV2.copy(z.g.position).setY(z.g.position.y + .95 * z.T.scale);
       const t = c.clone().sub(origin).dot(dir); if (t < 0) continue;
       const d = c.clone().sub(origin.clone().addScaledVector(dir, t)).length();
-      if (d < .9 * z.T.scale + t * .03 && t < bd) { bd = t; best = c.clone(); }
+      if (d < 1.3 * z.T.scale + t * .05 && t < bd) { bd = t; best = z; }
     }
     return best;
+  }
+  // Where to aim at a moving zombie so the shot meets it: its centre plus how far it walks while the shot flies.
+  const still = new THREE.Vector3();
+  function leadOn(z, from, W) {
+    const c = new THREE.Vector3();
+    for (let k = 0, t = 0; k < 3; k++) {
+      c.copy(z.g.position).addScaledVector(z.vel || still, t); c.y += .95 * z.T.scale;
+      t = Math.hypot(c.x - from.x, c.z - from.z) / W.speed;
+    }
+    return c;
+  }
+  // Your shot: leaves the blaster but lands exactly where you tapped (the zombie, else the ground or sky there).
+  function playerFire(dir, zTarget) {
+    const W = WHO[st.who], origin = camera.getWorldPosition(new THREE.Vector3());
+    const from = camera.localToWorld(new THREE.Vector3(.28, -.2, -.8));
+    const z = zTarget || assist(origin, dir);
+    let to;
+    if (z) to = leadOn(z, from, W);
+    else if (dir.y < -.01 && -origin.y / dir.y < 80) to = origin.clone().addScaledVector(dir, -origin.y / dir.y);
+    else to = origin.clone().addScaledVector(dir, 60);
+    st.recoil = 1;
+    shoot(W, from, to, S.up.zDmg);
   }
   function fireFrom(who, target) {
     const from = eyeOf(who, new THREE.Vector3());
@@ -527,9 +547,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         st.fireT -= dt;
         if (st.holding && st.fireT <= 0) {
           st.fireT = WHO[st.who].rate * S.up.zRate;
-          const origin = camera.getWorldPosition(new THREE.Vector3());
-          const dir = st.aim ? st.aim.clone() : camera.getWorldDirection(new THREE.Vector3());
-          fireFrom(st.who, assist(origin, dir) || origin.clone().addScaledVector(dir, 40));
+          playerFire(st.aim ? st.aim.clone() : camera.getWorldDirection(new THREE.Vector3()));
         }
         // Auto blaster upgrade: fire at the nearest zombie in view when you're not touching.
         st.autoT -= dt;
@@ -539,9 +557,9 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
           for (const z of zombies) {
             if (z.pop) continue;
             const c = tmpV2.copy(z.g.position).setY(.95 * z.T.scale), d = c.distanceTo(origin);
-            if (d < bd && c.clone().sub(origin).normalize().dot(fwd) > .82) { bd = d; best = c.clone(); }
+            if (d < bd && c.clone().sub(origin).normalize().dot(fwd) > .82) { bd = d; best = z; }
           }
-          if (best) { fireFrom(st.who, best); st.autoT = WHO[st.who].rate * S.up.zRate * [0, 2.2, 1.5, 1.05][S.up.zAuto]; }
+          if (best) { playerFire(fwd, best); st.autoT = WHO[st.who].rate * S.up.zRate * [0, 2.2, 1.5, 1.05][S.up.zAuto]; }
         }
         // The others defend on their own, a bit slower than you.
         for (const k of Object.keys(WHO)) {
@@ -553,8 +571,8 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
           if (target && st.helperT[k] <= 0) {
             // Helpers are slower than you and sometimes miss, so you're the main defender.
             st.helperT[k] = WHO[k].rate * 4.2 * S.up.zFam;
-            const aim = target.g.position.clone(); aim.y += .9 * target.T.scale + rand(-.5, .5) * S.up.zAim;
-            aim.x += rand(-.6, .6) * S.up.zAim; aim.z += TYPES[target.type].speed * S.diff.speed * .35;
+            const aim = leadOn(target, eyeOf(k, new THREE.Vector3()), WHO[k]); aim.y += rand(-.5, .5) * S.up.zAim;
+            aim.x += rand(-.6, .6) * S.up.zAim;
             fireFrom(k, aim);
           }
         }
@@ -606,8 +624,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
       for (let i = shots.length - 1; i >= 0; i--) {
         const s = shots[i];
         s.life -= dt;
-        if (s.W.shot === 'slipper') { s.v.y -= 6 * dt; s.g.rotation.x += dt * 14; }
-        else if (s.W.arc) { s.v.y -= 9 * dt; s.g.rotation.x += dt * 6; }
+        if (s.W.grav) { s.v.y -= s.W.grav * dt; s.g.rotation.x += dt * (s.W.shot === 'slipper' ? 14 : 6); }
         else if (s.W.shot === 'pepper') s.g.lookAt(tmpV.copy(s.g.position).add(s.v));
         s.g.position.addScaledVector(s.v, dt);
         let hitZ = null;
@@ -623,7 +640,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
           confetti.burst(s.g.position, s.W.shot === 'fire' ? 14 : 5);
         }
         // Mangoes splash where they land even if they miss.
-        if (!hitZ && s.W.arc && s.g.position.y < .1) { for (const z of zombies) if (!z.pop && z.g.position.distanceTo(s.g.position) < s.W.splash) damage(z, s.W.dmg * .6); confetti.burst(s.g.position, 8); }
+        if (!hitZ && s.W.splash && s.W.grav && s.g.position.y < .1) { for (const z of zombies) if (!z.pop && z.g.position.distanceTo(s.g.position) < s.W.splash) damage(z, s.W.dmg * .6); confetti.burst(s.g.position, 8); }
         if (hitZ || s.life <= 0 || s.g.position.y < 0) { world.remove(s.g); shots.splice(i, 1); }
       }
 
@@ -681,6 +698,9 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
             else if (st.house < 30 && !st.warned) { st.warned = true; banner('The door is breaking! Pop them fast!'); }
           }
         }
+        // Remember how fast it's moving, so shots can lead it.
+        if (!z.vel) { z.vel = new THREE.Vector3(); z.prev = p.clone(); }
+        if (dt > 0) { z.vel.lerp(tmpV.copy(p).sub(z.prev).divideScalar(dt), .2); z.prev.copy(p); }
         // Wobbly zombie walk with arms out.
         const sw = Math.sin(z.ph);
         z.legs.forEach((l, k) => { l.rotation.x = z.bike ? -1.3 : sw * .55 * (k ? -1 : 1); });
