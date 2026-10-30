@@ -2,13 +2,15 @@
 // Silly cartoon zombies shuffle through the gate wanting to eat Pearl; the family pops them
 // into confetti. Drag to look around, tap or hold to shoot, switch between Pearl (bubble
 // blaster), Mummy (slipper toss) and Daddy (fireball cannon). Whoever isn't being played
-// keeps defending on their own.
+// keeps defending on their own. Between and during waves, plant Lagos defenders in the
+// yard with naira (₦) earned from popping zombies, lane tower-defence style. Zombies come
+// through the front gate and both side gates, and munch on defenders in their way.
 import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, textSprite, store, outlined } from './common.js';
 import { sfx } from './audio.js';
 import { makeMumFigure } from './chase.js';
 import { makeDaddyFigure } from './daddy.js';
 
-const PORCH_Z = -1.7, DOOR_Z = -2.9, GATE_Z = -14;
+const PORCH_Z = -1.7, DOOR_Z = -2.9, GATE_Z = -14, SIDE_X = 14, SIDE_Z = -7;
 const WHO = {
   pearl: { name: 'Pearl', weapon: 'Bubble blaster', x: 0, eye: 1.05, rate: .17, dmg: 1, speed: 28, shot: 'bubble' },
   mum: { name: 'Mummy', weapon: 'Slipper toss', x: -2.3, eye: 1.85, rate: .42, dmg: 3, speed: 24, shot: 'slipper' },
@@ -19,6 +21,17 @@ const TYPES = {
   runner: { hp: 2, speed: 2.3, scale: .8, dmg: 3, pearls: 1 },
   big: { hp: 14, speed: .75, scale: 1.6, dmg: 9, pearls: 4 },
   okada: { hp: 6, speed: 3.2, scale: 1, dmg: 6, pearls: 3 },
+  helmet: { hp: 9, speed: 1, scale: 1.05, dmg: 5, pearls: 2 },
+};
+const CASH = { walker: 10, runner: 8, big: 30, okada: 20, helmet: 15 };
+// Defenders you plant in the yard with naira. `range` in metres, `rate` in seconds.
+export const DEFS = {
+  pepper: { icon: '🌶️', name: 'Pepper Shooter', cost: 125, hp: 12, range: 13, rate: 1.3, dmg: 1.5, shot: 'pepper', speed: 20 },
+  mango: { icon: '🥭', name: 'Mango Lobber', cost: 175, hp: 12, range: 17, rate: 3, dmg: 3, shot: 'mango', speed: 13, splash: 2.2, arc: true },
+  water: { icon: '💧', name: 'Pure Water Sprinkler', cost: 100, hp: 10, range: 4 },
+  block: { icon: '🧱', name: 'Cement Block', cost: 50, hp: 45 },
+  banger: { icon: '🧨', name: 'Banger', cost: 50, hp: 1, range: 1.2, blast: 3, dmg: 25 },
+  stall: { icon: '🍲', name: 'Mama Put Stall', cost: 75, hp: 8, rate: 10, earn: 25 },
 };
 const SAYINGS = ['Yummy Pearl!', 'Pearl! Pearl!', 'Braaains... no, PEARLS!', 'Open the door o!', 'I smell jollof!'];
 
@@ -62,6 +75,13 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     hpBack: new THREE.MeshBasicMaterial({ color: 0x24163d, depthTest: false, transparent: true, opacity: .7 }),
     hpFill: new THREE.MeshBasicMaterial({ color: 0x7fe38a, depthTest: false }),
     bike: new THREE.MeshLambertMaterial({ color: 0xd8323a }),
+    helmet: new THREE.MeshLambertMaterial({ color: 0xffc93c }),
+    cement: new THREE.MeshLambertMaterial({ color: 0xb8b2aa }),
+    pot: new THREE.MeshLambertMaterial({ color: 0x9a5a3a }),
+    sachet: new THREE.MeshLambertMaterial({ color: 0xe8f6ff, transparent: true, opacity: .75 }),
+    blue: new THREE.MeshLambertMaterial({ color: 0x2f6fd6 }),
+    umbrella: new THREE.MeshLambertMaterial({ color: 0xff6b4a, side: THREE.DoubleSide }),
+    grid: new THREE.MeshBasicMaterial({ transparent: true, opacity: .55, depthWrite: false }),
   };
   const shirts = ['#ff6b4a', '#ffc93c', '#0f8a8f', '#6b4fc9', '#ff5c8a'].map(col => new THREE.MeshLambertMaterial({ map: tex(64, 64, (c, w, h) => {
     c.fillStyle = col; c.fillRect(0, 0, w, h); c.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < 6; i++) c.fillRect(rand(0, w), rand(0, h), rand(4, 12), rand(3, 8));
@@ -82,10 +102,16 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
   for (const x of [-4, 4]) { const p = mesh(G.cyl, Z.wall, .18, 3.4, .18); p.position.set(x, 1.7, -2.6); house.add(p); }
   const canopy = mesh(G.box, Z.roof, 9.4, .25, 3.6); canopy.position.set(0, 3.45, -1.2); house.add(canopy);
   const bulb = mesh(G.sphere, Z.lamp, .16); bulb.position.set(0, 3.2, -.2); house.add(bulb);
-  // Compound wall with a gate in the middle.
+  // Compound wall: a gate in the front and a side gate on each side.
+  const wallPiece = (w, d, x, z) => {
+    const m = mesh(G.box, Z.wall, w, 2.2, d); m.position.set(x, 1.1, z); world.add(m);
+    const t = mesh(G.box, Z.wallTop, w + .2, .2, d + .1); t.position.set(x, 2.25, z); world.add(t);
+  };
   for (const s of [-1, 1]) {
-    const w = mesh(G.box, Z.wall, 20, 2.2, .4); w.position.set(s * 12.5, 1.1, GATE_Z); world.add(w);
-    const top = mesh(G.box, Z.wallTop, 20.2, .2, .5); top.position.set(s * 12.5, 2.25, GATE_Z); world.add(top);
+    wallPiece(11.4, .4, s * 8.3, GATE_Z);
+    wallPiece(.4, 5.5, s * SIDE_X, -11.25); wallPiece(.4, 7.5, s * SIDE_X, -1.75);
+    for (const z of [-8.5, -5.5]) { const sp = mesh(G.box, Z.wall, .8, 2.8, .8); sp.position.set(s * SIDE_X, 1.4, z); world.add(sp); }
+    const sl = mesh(G.sphere, Z.lamp, .2); sl.position.set(s * SIDE_X, 3, -8.5); world.add(sl);
     const pillar = mesh(G.box, Z.wall, .8, 2.8, .8); pillar.position.set(s * 2.6, 1.4, GATE_Z); world.add(pillar);
     const gate = mesh(G.box, Z.metal, 2.2, 2, .1); gate.position.set(s * 3.5, 1.1, GATE_Z - 1); gate.rotation.y = s * -1.1; world.add(gate);
     const lampG = mesh(G.sphere, Z.lamp, .22); lampG.position.set(s * 2.6, 3, GATE_Z); world.add(lampG);
@@ -157,6 +183,11 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     for (let k = 0; k < 4; k++) { const h = mesh(G.lowSphere, Z.zhair, .1); h.position.set(rand(-.15, .15), .27, rand(-.15, .05)); head.add(h); }
     const arms = [-1, 1].map(sx => { const a = new THREE.Group(); a.position.set(sx * .3, .62, 0); a.add(new THREE.Mesh(ARM, skin)); torso.add(a); return a; });
     const legs = [-1, 1].map(sx => { const l = new THREE.Group(); l.position.set(sx * .13, 0, 0); l.add(new THREE.Mesh(LEG, Z.zpants)); hips.add(l); return l; });
+    if (type === 'helmet') {
+      // An okada rider's yellow helmet: extra toughness.
+      const hel = new THREE.Mesh(new THREE.SphereGeometry(.35, 16, 8, 0, Math.PI * 2, 0, Math.PI * .5), Z.helmet); hel.position.y = .02; head.add(hel);
+      const visor = mesh(G.box, Z.metal, .5, .06, .1); visor.position.set(0, .05, .3); head.add(visor);
+    }
     let bike = null;
     if (type === 'okada') {
       // An okada: a little red motorbike.
@@ -172,7 +203,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     hp.visible = false;
     g.scale.setScalar(T.scale);
     world.add(g);
-    return { type, T, g, inner, hips, torso, head, arms, legs, bike, hp, fill, hpMax: Math.ceil(T.hp * (1 + Math.max(0, st.wave - 2) * .15)), ph: rand(0, 6), pop: 0, hit: 0, bang: 0, say: null, sayT: 0 };
+    return { type, T, g, inner, hips, torso, head, arms, legs, bike, hp, fill, hpMax: Math.ceil(T.hp * (1 + Math.max(0, st.wave - 1) * .32)), ph: rand(0, 6), pop: 0, hit: 0, bang: 0, say: null, sayT: 0 };
   }
 
   /* ---------- shots ---------- */
@@ -183,23 +214,36 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     strap: new THREE.MeshLambertMaterial({ color: 0xffc93c }),
     core: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.2, .6) }),
     glow: new THREE.MeshBasicMaterial({ color: 0xff6a00, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false }),
+    pepper: new THREE.MeshLambertMaterial({ color: 0xe8241a, emissive: 0x501008 }),
+    stem: new THREE.MeshLambertMaterial({ color: 0x2f9e4a }),
+    mango: new THREE.MeshLambertMaterial({ color: 0xffb020, emissive: 0x402000 }),
   };
   function makeShot(kind) {
     const g = new THREE.Group();
     if (kind === 'bubble') { g.add(mesh(G.lowSphere, shotMats.bubble, .14)); const h = mesh(G.lowSphere, shotMats.bubbleHi, .035); h.position.set(-.05, .05, .1); g.add(h); }
     else if (kind === 'slipper') { g.add(mesh(G.box, shotMats.slipper, .22, .05, .5)); const s = new THREE.Mesh(new THREE.TorusGeometry(.09, .025, 6, 12, Math.PI), shotMats.strap); s.rotation.x = -Math.PI / 2; s.position.z = -.08; g.add(s); }
+    else if (kind === 'pepper') { const pp = mesh(G.lowSphere, shotMats.pepper, .09, .09, .2); g.add(pp); const st2 = mesh(G.cyl, shotMats.stem, .025, .08, .025); st2.rotation.x = Math.PI / 2; st2.position.z = .2; g.add(st2); }
+    else if (kind === 'mango') { g.add(mesh(G.lowSphere, shotMats.mango, .16, .2, .16)); }
     else { g.add(mesh(G.lowSphere, shotMats.core, .16)); g.add(mesh(G.lowSphere, shotMats.glow, .3)); }
     g.traverse(o => { o.userData.noShadow = true; });
     world.add(g); return g;
   }
   const shots = [];
-  function shoot(who, from, to) {
-    const W = WHO[who], g = makeShot(W.shot);
+  // W is a shooter (WHO) or a defender (DEFS); mul scales damage (Power shots upgrade).
+  function shoot(W, from, to, mul = 1) {
+    const g = makeShot(W.shot);
     g.position.copy(from);
-    const v = to.clone().sub(from).normalize().multiplyScalar(W.speed);
-    if (W.shot === 'slipper') v.y += 2.2;
-    shots.push({ g, v, life: 2.2, who, W });
-    (W.shot === 'bubble' ? sfx.bubbleShot : W.shot === 'slipper' ? sfx.slipper : sfx.cannon)();
+    let v;
+    if (W.arc) {
+      // Lob: a ballistic arc that lands on the target.
+      const d = to.clone().sub(from), T = Math.max(.5, Math.hypot(d.x, d.z) / W.speed);
+      v = new THREE.Vector3(d.x / T, d.y / T + 4.5 * T, d.z / T);
+    } else {
+      v = to.clone().sub(from).normalize().multiplyScalar(W.speed);
+      if (W.shot === 'slipper') v.y += 2.2;
+    }
+    shots.push({ g, v, life: W.arc ? 4 : 2.2, W, mul });
+    ({ bubble: sfx.bubbleShot, slipper: sfx.slipper, fire: sfx.cannon, pepper: sfx.bubbleShot, mango: sfx.slipper })[W.shot]();
   }
 
   /* ---------- first-person view: the blaster in your hand ---------- */
@@ -213,17 +257,17 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
   for (const g of Object.values(VM)) { const hand = mesh(G.sphere, viewSkin, .07, .06, .1); hand.position.set(0, -.07, .12); g.add(hand); g.position.set(.28, -.26, -.55); g.traverse(o => { o.userData.noShadow = true; }); view.add(g); }
 
   /* ---------- state ---------- */
-  const st = { level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 0, house: 100, kills: 0, who: 'pearl', yaw: 0, pitch: -.05, fireT: 0, helperT: { pearl: 0, mum: .5, dad: 1 }, aim: null, holding: false, recoil: 0, groanT: 3, inside: false };
+  const st = { cash: 0, placing: null, warnL: 0, warnR: 0, autoT: 0, level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 0, house: 100, kills: 0, who: 'pearl', yaw: 0, pitch: -.05, fireT: 0, helperT: { pearl: 0, mum: .5, dad: 1 }, aim: null, holding: false, recoil: 0, groanT: 3, inside: false };
   const zombies = [];
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const eyePos = new THREE.Vector3(), menuPos = new THREE.Vector3(), menuQ = new THREE.Quaternion(), fpsQ = new THREE.Quaternion(), dummy = new THREE.PerspectiveCamera();
   const sayCache = new Map();
   const saySprite = t => { if (!sayCache.has(t)) sayCache.set(t, textSprite(t)); return sayCache.get(t); };
 
-  function clearZombies() { for (const z of zombies) { world.remove(z.g); if (z.say) world.remove(z.say); } zombies.length = 0; for (const s of shots) world.remove(s.g); shots.length = 0; }
+  function clearZombies() { for (const z of zombies) { world.remove(z.g); if (z.say) world.remove(z.say); } zombies.length = 0; for (const s of shots) world.remove(s.g); shots.length = 0; for (const f of floats) world.remove(f.s); floats.length = 0; }
   function startWave() {
     st.wave++; st.level = st.wave;
-    st.toSpawn = Math.round((5 + st.wave * 4) * (.7 + S.diff.attack * .3));
+    st.toSpawn = Math.round((7 + st.wave * 5) * (.7 + S.diff.attack * .3));
     st.spawnT = 1;
     levelUp(st.wave, st.wave === 1 ? 'Wave 1! Here they come!' : `Wave ${st.wave}! More zombies!`);
     hud();
@@ -231,20 +275,29 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
   function pickType() {
     const w = st.wave, r = Math.random();
     if (w >= 4 && r < .14) return 'okada';
-    if (w >= 3 && r < .3) return 'big';
-    if (w >= 2 && r < .55) return 'runner';
+    if (w >= 3 && r < .28) return 'big';
+    if (w >= 2 && r < .45) return 'helmet';
+    if (w >= 2 && r < .62) return 'runner';
     return 'walker';
   }
+  // Zombies come through the front gate, and from wave 2 also through the side gates.
   function spawn() {
     const z = makeZombie(pickType());
-    z.homeX = rand(-3.8, 3.8);
-    z.g.position.set(rand(-16, 16), 0, rand(-48, -38));
+    const homeX = rand(-3.8, 3.8), r = Math.random(), side = st.wave >= 2 && r < .5 ? (r < .25 ? -1 : 1) : 0;
+    if (side) {
+      z.g.position.set(side * rand(32, 42), 0, SIDE_Z + rand(-4, 4));
+      z.path = [new THREE.Vector3(side * (SIDE_X + 1), 0, SIDE_Z + rand(-.8, .8)), new THREE.Vector3(side * (SIDE_X - 1.5), 0, SIDE_Z), new THREE.Vector3(homeX, 0, DOOR_Z)];
+    } else {
+      z.g.position.set(rand(-16, 16), 0, rand(-48, -38));
+      z.path = [new THREE.Vector3(rand(-1.6, 1.6), 0, GATE_Z - .8), new THREE.Vector3(rand(-1.6, 1.6), 0, GATE_Z + 1), new THREE.Vector3(homeX, 0, DOOR_Z)];
+    }
+    z.pi = 0; z.side = side;
     zombies.push(z); st.toSpawn--;
   }
   function popZombie(z) {
     z.pop = .001; z.hp.visible = false;
     confetti.burst(tmpV.copy(z.g.position).setY(1.2 * z.T.scale), 30);
-    S.pearls += z.T.pearls; st.kills++; sfx.zPop(); hud();
+    S.pearls += z.T.pearls; st.kills++; st.cash += CASH[z.type]; sfx.zPop(); hud();
   }
   function damage(z, dmg) {
     if (z.pop) return;
@@ -271,8 +324,79 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     const from = eyeOf(who, new THREE.Vector3());
     if (who === st.who) { from.copy(camera.localToWorld(new THREE.Vector3(.28, -.2, -.8))); st.recoil = 1; }
     else from.y -= .35;
-    shoot(who, from, target);
+    shoot(WHO[who], from, target, who === st.who ? S.up.zDmg : 1);
   }
+
+  /* ---------- defenders planted in the yard ---------- */
+  const defenders = [];
+  // Grid kept out in the yard (not right by the porch) so defenders don't block your view.
+  const CELL = 2, GX = 6, GZ0 = -12, GZ1 = -6;
+  // A grid overlay shows where you can plant while choosing a spot.
+  const gridTex = tex(64, 64, (c, w, h) => { c.clearRect(0, 0, w, h); c.strokeStyle = 'rgba(255,248,240,.9)'; c.lineWidth = 3; c.strokeRect(3, 3, w - 6, h - 6); c.fillStyle = 'rgba(127,227,138,.18)'; c.fillRect(3, 3, w - 6, h - 6); }, true);
+  gridTex.repeat.set(GX * 2 + 1, (GZ1 - GZ0) / CELL + 1); Z.grid.map = gridTex;
+  const grid = new THREE.Mesh(new THREE.PlaneGeometry((GX * 2 + 1) * CELL, ((GZ1 - GZ0) / CELL + 1) * CELL), Z.grid);
+  grid.rotation.x = -Math.PI / 2; grid.position.set(0, .04, (GZ0 + GZ1) / 2); grid.visible = false; grid.userData.noShadow = true; world.add(grid);
+  function cellAt(pt) {
+    const cx = Math.round(pt.x / CELL), cz = Math.round((pt.z - GZ0) / CELL);
+    if (Math.abs(cx) > GX || cz < 0 || pt.z > GZ1 + 1 || cz > (GZ1 - GZ0) / CELL) return null;
+    return { x: cx * CELL, z: GZ0 + cz * CELL, key: cx + ',' + cz };
+  }
+  function makeDefender(kind) {
+    const g = new THREE.Group(), top = new THREE.Group(); g.add(top);
+    const eyesOn = (y, z) => { for (const sx of [-1, 1]) { const w = mesh(G.sphere, M.white, .07); w.position.set(sx * .1, y, z); top.add(w); const e = mesh(G.sphere, M.eye, .035); e.position.set(sx * .1, y, z + .05); top.add(e); } };
+    if (kind === 'pepper') {
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(.35, .25, .45, 14), Z.pot); pot.position.y = .22; g.add(pot);
+      const stem = mesh(G.cyl, shotMats.stem, .05, .5, .05); stem.position.y = .65; g.add(stem);
+      top.position.y = 1.05; const pp = mesh(G.sphere, shotMats.pepper, .26, .26, .42); top.add(pp); eyesOn(.1, .22);
+      const cap = mesh(G.sphere, shotMats.stem, .14, .08, .14); cap.position.z = -.38; top.add(cap);
+    } else if (kind === 'mango') {
+      const trunk = mesh(G.cyl, Z.trunk, .12, 1, .12); trunk.position.y = .5; g.add(trunk);
+      top.position.y = 1.3; top.add(mesh(G.lowSphere, Z.leaf, .65, .5, .65)); eyesOn(.05, .58);
+      for (let i = 0; i < 4; i++) { const m = mesh(G.lowSphere, Z.mango, .12, .15, .12); m.position.set(Math.cos(i * 1.6) * .5, -.25, Math.sin(i * 1.6) * .5); top.add(m); }
+    } else if (kind === 'water') {
+      for (let i = 0; i < 4; i++) { const b = mesh(G.box, Z.sachet, .4, .12, .3); b.position.set((i % 2) * .3 - .15, .06 + Math.floor(i / 2) * .13, 0); g.add(b); }
+      const pole = mesh(G.cyl, Z.blue, .06, 1, .06); pole.position.y = .6; g.add(pole);
+      top.position.y = 1.15; for (let i = 0; i < 3; i++) { const arm = mesh(G.box, Z.blue, .7, .06, .06); arm.rotation.y = i * Math.PI / 3; top.add(arm); }
+    } else if (kind === 'block') {
+      for (const [x, y] of [[-.42, .25], [.42, .25], [0, .75]]) { const b = mesh(G.box, Z.cement, .82, .48, .7); b.position.set(x, y, 0); g.add(b); }
+    } else if (kind === 'banger') {
+      const c = mesh(G.cyl, Z.gen, .14, .5, .14); c.position.y = .25; g.add(c);
+      const band = mesh(G.cyl, Z.helmet, .15, .08, .15); band.position.y = .3; g.add(band);
+      top.position.y = .55; const fuse = mesh(G.cyl, Z.metal, .02, .2, .02); fuse.position.y = .08; fuse.rotation.z = .4; top.add(fuse);
+      const spark = mesh(G.sphere, Z.lamp, .05); spark.position.set(.05, .19, 0); top.add(spark);
+    } else {
+      const table = mesh(G.box, Z.trunk, 1.1, .08, .7); table.position.y = .7; g.add(table);
+      for (const [x, z] of [[-.45, -.25], [.45, -.25], [-.45, .25], [.45, .25]]) { const l = mesh(G.box, Z.trunk, .07, .7, .07); l.position.set(x, .35, z); g.add(l); }
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(.22, .18, .25, 12), Z.metal); pot.position.set(-.2, .86, 0); g.add(pot);
+      const plate = mesh(G.cyl, Z.mango, .15, .03, .15); plate.position.set(.25, .76, 0); g.add(plate);
+      const pole = mesh(G.cyl, Z.metal, .03, 1.2, .03); pole.position.y = 1.3; g.add(pole);
+      top.position.y = 1.85; const um = new THREE.Mesh(new THREE.ConeGeometry(.9, .45, 8, 1, true), Z.umbrella); top.add(um);
+    }
+    const hp = new THREE.Group(); hp.position.y = 1.9; g.add(hp);
+    const back = mesh(G.box, Z.hpBack, .7, .09, .01); back.renderOrder = 5; hp.add(back);
+    const fill = mesh(G.box, Z.hpFill, .66, .06, .012); fill.renderOrder = 6; hp.add(fill);
+    hp.visible = false;
+    world.add(g);
+    return { g, top, hp, fill };
+  }
+  function plant(kind, cell, free = false) {
+    const D = DEFS[kind];
+    if (!cell || defenders.some(d => d.key === cell.key)) return false;
+    if (!free) { if (st.cash < D.cost) return false; st.cash -= D.cost; }
+    const m = makeDefender(kind);
+    m.g.position.set(cell.x, 0, cell.z); m.g.scale.setScalar(.8);
+    defenders.push({ kind, D, key: cell.key, x: cell.x, z: cell.z, life: D.hp, t: rand(0, .5), ...m });
+    confetti.burst(tmpV.set(cell.x, .8, cell.z), 12); sfx.power();
+    return true;
+  }
+  function removeDefender(d, poof = true) {
+    world.remove(d.g); defenders.splice(defenders.indexOf(d), 1);
+    if (poof) { confetti.burst(tmpV.set(d.x, .6, d.z), 14); sfx.zHit(); }
+  }
+  function clearDefenders() { while (defenders.length) removeDefender(defenders[0], false); }
+  const floatCache = new Map();
+  const floatText = t => { if (!floatCache.has(t)) floatCache.set(t, textSprite(t, { color: '#3aa655' })); return floatCache.get(t); };
+  const floats = [];
   function setWho(who) {
     st.who = who;
     for (const [k, g] of Object.entries(VM)) g.visible = k === who;
@@ -293,17 +417,28 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     get who() { return st.who; },
     whoInfo: WHO,
     setWho,
+    DEFS,
+    get cash() { return st.cash; },
+    get placing() { return st.placing; },
+    get warn() { return [st.warnL, st.warnR]; },
+    // Choose a defender to plant (or the same one again to cancel).
+    select(kind) { st.placing = st.placing === kind ? null : kind; grid.visible = !!st.placing; hud(); },
+    plantAt(kind, x, z) { return plant(kind, cellAt({ x, z })); },
     enter() {
       world.visible = true; scene.background = sky; scene.fog = fog;
       setMermaid(P, false); P.root.rotation.set(0, 0, 0); P.inner.visible = true;
     },
-    exit() { world.visible = false; clearZombies(); view.visible = false; for (const F of Object.values(FIG)) F.root.visible = true; },
+    exit() { world.visible = false; clearZombies(); clearDefenders(); st.placing = null; grid.visible = false; view.visible = false; for (const F of Object.values(FIG)) F.root.visible = true; },
     start() {
       clearZombies();
-      Object.assign(st, { level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 2.2, house: 100, kills: 0, yaw: 0, pitch: -.05, fireT: 0, aim: null, holding: false, recoil: 0 });
+      clearDefenders();
+      Object.assign(st, { level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 5, house: 100, kills: 0, yaw: 0, pitch: -.05, fireT: 0, aim: null, holding: false, recoil: 0, cash: S.up.zCash, placing: null, warned: false, autoT: 0 });
+      grid.visible = false;
+      // Garden starter upgrade: Pepper Shooters already planted.
+      [[-2, -10], [2, -10], [0, -12]].slice(0, S.up.zSeed).forEach(([x, z]) => plant('pepper', cellAt({ x, z }), true));
       setWho(st.who);
     },
-    scoreText() { return `${S.pearls} pearls · Wave ${Math.max(1, st.wave)} · ${st.kills} popped`; },
+    scoreText() { return `₦${st.cash} · Wave ${Math.max(1, st.wave)} · ${st.kills} popped`; },
     finish(bank) {
       const best = store.get('pw_zbest', 0), rec = st.wave > best; if (rec) store.set('pw_zbest', st.wave);
       if (st.house <= 0) return {
@@ -333,16 +468,28 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         if (st.breakT > 0) { st.breakT -= dt; if (st.breakT <= 0) startWave(); }
         else if (st.toSpawn > 0) {
           st.spawnT -= dt;
-          if (st.spawnT <= 0) { spawn(); st.spawnT = Math.max(.45, 2.1 - st.wave * .13) / (.7 + S.diff.attack * .3); }
-        } else if (!zombies.some(z => !z.pop)) { st.breakT = 3; banner(`Wave ${st.wave} cleared! Well done!`); sfx.milestone(); }
+          if (st.spawnT <= 0) { spawn(); st.spawnT = Math.max(.3, 1.7 - st.wave * .15) / (.7 + S.diff.attack * .3); }
+        } else if (!zombies.some(z => !z.pop)) { st.breakT = 6; banner(`Wave ${st.wave} cleared! Plant more defenders!`); sfx.milestone(); }
 
         // You: hold to keep firing at the finger (or straight ahead with the keyboard).
         st.fireT -= dt;
         if (st.holding && st.fireT <= 0) {
-          st.fireT = WHO[st.who].rate;
+          st.fireT = WHO[st.who].rate * S.up.zRate;
           const origin = camera.getWorldPosition(new THREE.Vector3());
           const dir = st.aim ? st.aim.clone() : camera.getWorldDirection(new THREE.Vector3());
           fireFrom(st.who, assist(origin, dir) || origin.clone().addScaledVector(dir, 40));
+        }
+        // Auto blaster upgrade: fire at the nearest zombie in view when you're not touching.
+        st.autoT -= dt;
+        if (S.up.zAuto > 0 && !st.holding && st.autoT <= 0) {
+          const origin = camera.getWorldPosition(new THREE.Vector3()), fwd = camera.getWorldDirection(new THREE.Vector3());
+          let best = null, bd = 40;
+          for (const z of zombies) {
+            if (z.pop) continue;
+            const c = tmpV2.copy(z.g.position).setY(.95 * z.T.scale), d = c.distanceTo(origin);
+            if (d < bd && c.clone().sub(origin).normalize().dot(fwd) > .82) { bd = d; best = c.clone(); }
+          }
+          if (best) { fireFrom(st.who, best); st.autoT = WHO[st.who].rate * S.up.zRate * [0, 2.2, 1.5, 1.05][S.up.zAuto]; }
         }
         // The others defend on their own, a bit slower than you.
         for (const k of Object.keys(WHO)) {
@@ -353,9 +500,9 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
           FIG[k].target = target;
           if (target && st.helperT[k] <= 0) {
             // Helpers are slower than you and sometimes miss, so you're the main defender.
-            st.helperT[k] = WHO[k].rate * 4.2;
-            const aim = target.g.position.clone(); aim.y += .9 * target.T.scale + rand(-.5, .5);
-            aim.x += rand(-.6, .6); aim.z += TYPES[target.type].speed * S.diff.speed * .35;
+            st.helperT[k] = WHO[k].rate * 4.2 * S.up.zFam;
+            const aim = target.g.position.clone(); aim.y += .9 * target.T.scale + rand(-.5, .5) * S.up.zAim;
+            aim.x += rand(-.6, .6) * S.up.zAim; aim.z += TYPES[target.type].speed * S.diff.speed * .35;
             fireFrom(k, aim);
           }
         }
@@ -363,11 +510,53 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         if (st.groanT <= 0 && zombies.length) { st.groanT = rand(2.5, 5); sfx.groan(); }
       }
 
+      // Defenders
+      for (const d of [...defenders]) {
+        const D = d.D;
+        d.hp.quaternion.copy(camera.quaternion);
+        if (!playing) continue;
+        if (D.shot) {
+          d.t -= dt;
+          let target = null, bd = D.range;
+          for (const z of zombies) { if (z.pop) continue; const dist = Math.hypot(z.g.position.x - d.x, z.g.position.z - d.z); if (dist < bd) { bd = dist; target = z; } }
+          if (target) {
+            d.top.rotation.y = damp(d.top.rotation.y, Math.atan2(target.g.position.x - d.x, target.g.position.z - d.z), 8, dt);
+            if (d.t <= 0) {
+              d.t = D.rate;
+              const aim = target.g.position.clone(); aim.y = .95 * target.T.scale;
+              shoot(D, tmpV.set(d.x, 1.1, d.z).clone(), aim);
+              d.top.scale.set(1.15, .85, 1.15);
+            }
+          }
+          d.top.scale.lerp(tmpV2.set(1, 1, 1), Math.min(1, dt * 8));
+        } else if (d.kind === 'water') {
+          d.top.rotation.y += dt * 6;
+          for (const z of zombies) if (!z.pop && Math.hypot(z.g.position.x - d.x, z.g.position.z - d.z) < D.range) z.slowT = .3;
+          if (Math.random() < dt * 6) confetti.burst(tmpV.set(d.x + rand(-1, 1), 1.1, d.z + rand(-1, 1)), 1, 4);
+        } else if (d.kind === 'stall') {
+          d.t -= dt;
+          if (d.t <= 0) {
+            d.t = D.rate; st.cash += D.earn; sfx.pearl(); hud();
+            const sp = floatText(`+₦${D.earn}`).clone(); sp.position.set(d.x, 2.2, d.z); world.add(sp); floats.push({ s: sp, t: 1.2 });
+          }
+        } else if (d.kind === 'banger') {
+          d.top.rotation.y += dt * 10;
+          const near = zombies.find(z => !z.pop && Math.hypot(z.g.position.x - d.x, z.g.position.z - d.z) < D.range);
+          if (near) {
+            for (const z of zombies) if (!z.pop && Math.hypot(z.g.position.x - d.x, z.g.position.z - d.z) < D.blast) damage(z, D.dmg);
+            confetti.burst(tmpV.set(d.x, .8, d.z), 50); sfx.cannon(); removeDefender(d, false);
+          }
+        }
+      }
+      for (let i = floats.length - 1; i >= 0; i--) { const f = floats[i]; f.t -= dt; f.s.position.y += dt; if (f.t <= 0) { world.remove(f.s); floats.splice(i, 1); } }
+
       // Shots
       for (let i = shots.length - 1; i >= 0; i--) {
         const s = shots[i];
         s.life -= dt;
         if (s.W.shot === 'slipper') { s.v.y -= 6 * dt; s.g.rotation.x += dt * 14; }
+        else if (s.W.arc) { s.v.y -= 9 * dt; s.g.rotation.x += dt * 6; }
+        else if (s.W.shot === 'pepper') s.g.lookAt(tmpV.copy(s.g.position).add(s.v));
         s.g.position.addScaledVector(s.v, dt);
         let hitZ = null;
         for (const z of zombies) {
@@ -376,11 +565,13 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
           if (c.distanceTo(s.g.position) < .55 * z.T.scale + .15) { hitZ = z; break; }
         }
         if (hitZ) {
-          damage(hitZ, s.W.dmg);
+          damage(hitZ, s.W.dmg * s.mul);
           hitZ.g.position.z -= .25 / hitZ.T.scale;
-          if (s.W.splash) for (const z of zombies) if (z !== hitZ && !z.pop && z.g.position.distanceTo(hitZ.g.position) < s.W.splash) damage(z, s.W.dmg * .5);
+          if (s.W.splash) for (const z of zombies) if (z !== hitZ && !z.pop && z.g.position.distanceTo(hitZ.g.position) < s.W.splash) damage(z, s.W.dmg * s.mul * .5);
           confetti.burst(s.g.position, s.W.shot === 'fire' ? 14 : 5);
         }
+        // Mangoes splash where they land even if they miss.
+        if (!hitZ && s.W.arc && s.g.position.y < .1) { for (const z of zombies) if (!z.pop && z.g.position.distanceTo(s.g.position) < s.W.splash) damage(z, s.W.dmg * .6); confetti.burst(s.g.position, 8); }
         if (hitZ || s.life <= 0 || s.g.position.y < 0) { world.remove(s.g); shots.splice(i, 1); }
       }
 
@@ -393,18 +584,29 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
           continue;
         }
         z.ph += dt * 5 * (z.type === 'runner' ? 1.8 : 1);
-        const speed = z.T.speed * S.diff.speed * (1 + st.wave * .06) * (playing ? 1 : 0);
-        const tx = p.z < GATE_Z - .5 ? THREE.MathUtils.clamp(p.x, -1.8, 1.8) : z.homeX;
-        const tz = p.z < GATE_Z - .5 ? GATE_Z : DOOR_Z + z.homeX * 0;
-        const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
-        if (d > .15) {
+        if (z.slowT > 0) z.slowT -= dt;
+        const speed = z.T.speed * S.diff.speed * (1 + st.wave * .09) * (playing ? 1 : 0) * (z.slowT > 0 ? .5 : 1);
+        // Follow the path: through a gate, into the yard, up to the door.
+        let tgt = z.path[z.pi];
+        if (z.pi < z.path.length - 1 && Math.hypot(tgt.x - p.x, tgt.z - p.z) < .5) tgt = z.path[++z.pi];
+        const dx = tgt.x - p.x, dz = tgt.z - p.z, d = Math.hypot(dx, dz);
+        // A defender in the way gets munched until it breaks.
+        const block = playing && defenders.find(df => df.kind !== 'banger' && Math.hypot(df.x - p.x, df.z - p.z) < .95 + z.T.scale * .2 && ((df.x - p.x) * dx + (df.z - p.z) * dz) > 0);
+        if (block) {
+          z.bang = Math.max(z.bang - dt, 0);
+          block.life -= 6 * z.T.scale * dt; block.hp.visible = true;
+          block.fill.scale.x = Math.max(.01, block.life / block.D.hp); block.fill.position.x = -.33 * (1 - block.fill.scale.x);
+          if (z.bang <= 0) { z.bang = .9; sfx.zHit(); }
+          if (block.life <= 0) removeDefender(block);
+          z.inner.rotation.y = Math.atan2(block.x - p.x, block.z - p.z);
+        } else if (d > .15) {
           p.x += dx / d * speed * dt; p.z += dz / d * speed * dt;
           z.inner.rotation.y = Math.atan2(dx, dz);
-        } else if (p.z >= GATE_Z) {
+        } else if (z.pi === z.path.length - 1) {
           // At the porch: bang on the door, which hurts the house.
           z.bang -= dt;
           if (playing && z.bang <= 0) {
-            z.bang = 1.1; st.house = Math.max(0, st.house - z.T.dmg * S.diff.hit); sfx.doorBang(); hud();
+            z.bang = 1.1; st.house = Math.max(0, st.house - z.T.dmg * 1.4 * S.diff.hit); sfx.doorBang(); hud();
             if (st.house <= 0) { banner('Oh no! The zombies got in!'); endGame(); }
             else if (st.house < 30 && !st.warned) { st.warned = true; banner('The door is breaking! Pop them fast!'); }
           }
@@ -420,6 +622,18 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         // Now and then a zombie calls out for Pearl.
         if (playing && !z.say && Math.random() < dt * .08 && p.z > -30) { z.say = saySprite(SAYINGS[Math.floor(Math.random() * SAYINGS.length)]); world.add(z.say); z.sayT = 2; }
         if (z.say) { z.say.position.set(p.x, 2.4 * z.T.scale, p.z); z.sayT -= dt; if (z.sayT <= 0) { world.remove(z.say); z.say = null; } }
+      }
+      // Warning arrows for zombies sneaking up outside your view.
+      if (playing) {
+        camera.updateMatrixWorld();
+        const inv = camera.matrixWorldInverse, tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect;
+        let L = 0, R = 0;
+        for (const z of zombies) {
+          if (z.pop || z.g.position.distanceTo(tmpV.set(0, 0, PORCH_Z)) > 26) continue;
+          const v = tmpV2.copy(z.g.position).setY(1).applyMatrix4(inv);
+          if (v.z > 0 || Math.abs(v.x / -v.z) > tanH) { if (v.x < 0) L++; else R++; }
+        }
+        if (L !== st.warnL || R !== st.warnR) { st.warnL = L; st.warnR = R; hud(); }
       }
       if (st.recoil > 0) st.recoil = Math.max(0, st.recoil - dt * 6);
       view.position.z = st.recoil * .08; view.rotation.x = st.recoil * .15;
@@ -437,7 +651,22 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     },
     fireHit() { return false; },
     fire() {},
-    pointerDown(e) { this._p = { x: e.clientX, y: e.clientY, yaw: st.yaw, pitch: st.pitch, drag: false, t: performance.now() }; this._aimAt(e); st.holding = true; st.fireT = Math.min(st.fireT, 0); },
+    pointerDown(e) {
+      if (st.placing) {
+        // Planting: tap a spot on the yard grid.
+        this._aimAt(e);
+        const origin = camera.getWorldPosition(new THREE.Vector3());
+        if (st.aim.y < -.01) {
+          const t = -origin.y / st.aim.y, pt = origin.clone().addScaledVector(st.aim, t);
+          const cell = cellAt(pt), D = DEFS[st.placing];
+          if (!cell) banner('Plant inside the yard grid');
+          else if (defenders.some(d => d.key === cell.key)) banner('Something is already there');
+          else if (st.cash < D.cost) banner(`You need ₦${D.cost} for a ${D.name}`);
+          else { plant(st.placing, cell); st.placing = null; grid.visible = false; hud(); }
+        }
+        this._p = null; return;
+      }
+      this._p = { x: e.clientX, y: e.clientY, yaw: st.yaw, pitch: st.pitch, drag: false, t: performance.now() }; this._aimAt(e); st.holding = true; st.fireT = Math.min(st.fireT, 0); },
     pointerMove(e) {
       const p = this._p; if (!p) return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y;
