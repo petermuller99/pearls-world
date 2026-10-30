@@ -1,0 +1,353 @@
+// First Steps: Pearl crawls, toddles and runs toward -z along the Lekki-Ikoyi Link Bridge.
+import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, sfx, store, COL } from './common.js';
+
+const LANES = [-1.5, 0, 1.5];
+const MILESTONES = [
+  { m: 60, t: 'First smile!' }, { m: 180, t: 'First word: "Dada"!' }, { m: 340, t: 'First tooth!' },
+  { m: 520, t: 'First steps!', stage: 1 }, { m: 800, t: 'Walking like a pro!' }, { m: 1100, t: 'Off she runs!', stage: 2 },
+  { m: 1500, t: 'Happy 1st birthday, Pearl!' }, { m: 2100, t: 'Big girl now!' }, { m: 3000, t: 'Unstoppable Pearl!' }];
+const STAGE_SPEED = [5, 7, 9.5];
+const DECK_W = 13, SEG = 20, PYLON_GAP = 110;
+
+export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
+  const world = new THREE.Group(); world.visible = false; scene.add(world);
+  const sky = gradientTex([[0, '#ff8f6b'], [.55, '#ffc58a'], [1, '#ffe3b0']]);
+  const fog = new THREE.Fog(0xffd9a8, 40, 170);
+
+  /* ---------- textures ---------- */
+  const deckTex = tex(512, 128, (c, w, h) => {
+    const u = w / DECK_W, X = x => (x + DECK_W / 2) * u;
+    c.fillStyle = '#4b3a58'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#f2c79a'; c.fillRect(X(-2.6), 0, X(2.6) - X(-2.6), h);
+    c.fillStyle = '#e8b688';
+    for (let i = 0; i < 8; i++) c.fillRect(X(-2.6), i * 16, X(2.6) - X(-2.6), 2);
+    c.fillStyle = '#fff8f0';
+    for (const x of [-.75, .75]) for (let y = 0; y < h; y += 32) c.fillRect(X(x) - 2, y, 4, 18);
+    c.fillStyle = '#ffc93c';
+    for (const x of [-4.5, 4.5]) for (let y = 0; y < h; y += 64) c.fillRect(X(x) - 3, y, 6, 36);
+  }, true);
+  deckTex.repeat.set(1, SEG / 13);
+  const flagTex = tex(96, 48, (c, w, h) => {
+    c.fillStyle = '#008751'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#ffffff'; c.fillRect(w / 3, 0, w / 3, h);
+  });
+  const BLOCK_COLS = ['#ff6b4a', '#0f8a8f', '#ff5c8a', '#ffc93c', '#6b4fc9', '#3aa655'];
+  const blockTex = (letter, bg) => tex(128, 128, (c, w, h) => {
+    c.fillStyle = bg; c.fillRect(0, 0, w, h);
+    c.strokeStyle = '#24163d'; c.lineWidth = 10; c.strokeRect(5, 5, w - 10, h - 10);
+    c.fillStyle = '#fff8f0'; c.font = '400 84px "Bagel Fat One", "Arial Rounded MT Bold", sans-serif';
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(letter, w / 2, h / 2 + 6);
+  });
+  const blockMats = 'ABCDEF'.split('').map((l, i) => new THREE.MeshLambertMaterial({ map: blockTex(l, BLOCK_COLS[i]) }));
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('400 84px "Bagel Fat One"').then(() => blockMats.forEach((m, i) => { m.map = blockTex('ABCDEF'[i], BLOCK_COLS[i]); m.needsUpdate = true; })).catch(() => {});
+  }
+  const ballTex = tex(256, 64, (c, w, h) => {
+    const cols = ['#ff6b4a', '#fff8f0', '#ffc93c', '#fff8f0', '#0f8a8f', '#fff8f0', '#ff5c8a', '#fff8f0'];
+    cols.forEach((col, i) => { c.fillStyle = col; c.fillRect(i * w / cols.length, 0, w / cols.length + 1, h); });
+  });
+  const windowTex = tex(64, 128, (c, w, h) => {
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#d9c2b0';
+    for (let y = 6; y < h; y += 14) for (let x = 6; x < w; x += 14) c.fillRect(x, y, 7, 8);
+    c.fillStyle = '#ffe9a8';
+    for (let i = 0; i < 6; i++) c.fillRect(6 + 14 * Math.floor(Math.random() * 4), 6 + 14 * Math.floor(Math.random() * 9), 7, 8);
+  }, true);
+  const danfoTex = tex(256, 64, (c, w, h) => {
+    c.fillStyle = '#ffc93c'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#24163d'; c.fillRect(0, 38, w, 7); c.fillRect(0, 50, w, 4);
+    c.fillStyle = '#3c3350';
+    for (let x = 10; x < w - 20; x += 34) c.fillRect(x, 8, 26, 22);
+  });
+  const R = {
+    ball: new THREE.MeshLambertMaterial({ map: ballTex }),
+    bottle: new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: .85 }),
+    milk: new THREE.MeshLambertMaterial({ color: 0xfff3dc }),
+    rail: new THREE.MeshLambertMaterial({ color: 0xfff8f0 }),
+    barrier: new THREE.MeshLambertMaterial({ color: 0xd9cfe0 }),
+    pylon: new THREE.MeshLambertMaterial({ color: 0xf4ece6 }),
+    danfo: new THREE.MeshLambertMaterial({ map: danfoTex }),
+    danfoTop: new THREE.MeshLambertMaterial({ color: COL.sun }),
+    tyre: new THREE.MeshLambertMaterial({ color: 0x1d1626 }),
+    kekeBody: new THREE.MeshLambertMaterial({ color: 0x3aa655 }),
+    palmLeaf: new THREE.MeshLambertMaterial({ color: 0x2f9e6a, side: THREE.DoubleSide }),
+    trunk: new THREE.MeshLambertMaterial({ color: 0x7a4a2c }),
+    sand: new THREE.MeshLambertMaterial({ color: 0xf2c79a }),
+  };
+
+  /* ---------- lights ---------- */
+  world.add(new THREE.HemisphereLight(0xffe2c4, 0x2c6f7a, 1.6));
+  const key = new THREE.DirectionalLight(0xfff0dc, 1.7);
+  // Low sunset light from ahead, so Pearl's face is lit whenever she turns to the camera.
+  const sunLight = new THREE.DirectionalLight(0xffc89a, 1.5);
+  world.add(key, key.target, sunLight, sunLight.target);
+
+  /* ---------- the bridge ---------- */
+  const deckGeo = new THREE.BoxGeometry(DECK_W, .5, SEG);
+  const deckMats = [R.barrier, R.barrier, new THREE.MeshLambertMaterial({ map: deckTex }), R.barrier, R.barrier, R.barrier];
+  const segments = [];
+  for (let i = 0; i < 9; i++) {
+    const g = new THREE.Group();
+    const d = new THREE.Mesh(deckGeo, deckMats); d.position.y = -.25; g.add(d);
+    for (const s of [-1, 1]) {
+      const bar = mesh(G.box, R.barrier, .25, .35, SEG); bar.position.set(s * 2.75, .17, 0); g.add(bar);
+      const rail = mesh(G.box, R.rail, .12, .1, SEG); rail.position.set(s * 6.4, .9, 0); g.add(rail);
+      for (let z = -SEG / 2; z < SEG / 2; z += 2.5) { const post = mesh(G.box, R.rail, .1, .9, .1); post.position.set(s * 6.4, .45, z); g.add(post); }
+    }
+    g.position.z = -i * SEG;
+    world.add(g); segments.push(g);
+  }
+
+  // Cable-stayed pylon arching over the bridge, with the Nigerian flag on top.
+  const flags = [];
+  function makePylon() {
+    const g = new THREE.Group();
+    for (const s of [-1, 1]) { const leg = mesh(G.box, R.pylon, .7, 15, .9); leg.position.set(s * 6.9, 7.5, 0); g.add(leg); }
+    const beam = mesh(G.box, R.pylon, 14.5, .9, 1); beam.position.y = 15; g.add(beam);
+    const pole = mesh(G.cyl, R.rail, .05, 3, .05); pole.position.y = 16.9; g.add(pole);
+    const fGeo = new THREE.PlaneGeometry(2, 1, 12, 1); fGeo.translate(1, 0, 0);
+    const flag = new THREE.Mesh(fGeo, new THREE.MeshLambertMaterial({ map: flagTex, side: THREE.DoubleSide }));
+    flag.position.set(0, 17.9, 0); flag.rotation.y = -Math.PI / 2 - .5; g.add(flag);
+    flags.push({ geo: fGeo, base: Float32Array.from(fGeo.attributes.position.array) });
+    const pts = [];
+    for (const s of [-1, 1]) for (const dz of [-22, -15, -9, -4, 4, 9, 15, 22]) pts.push(s * 6.9, 14, 0, s * 6.4, 1, dz);
+    const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    g.add(new THREE.LineSegments(cg, new THREE.LineBasicMaterial({ color: 0xfff8f0 })));
+    world.add(g); return g;
+  }
+  const pylons = [0, 1].map(i => { const p = makePylon(); p.position.z = -60 - i * PYLON_GAP; return p; });
+
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshLambertMaterial({ color: 0x1a9a9a }));
+  water.rotation.x = -Math.PI / 2; water.position.y = -2.2; world.add(water);
+  const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(26, 40), new THREE.MeshBasicMaterial({ color: 0xfff1c9, fog: false }));
+  world.add(sunDisc);
+
+  const BCOLS = [0xf0a48a, 0xe58f7e, 0xf6c3a0, 0xd98a8a, 0xf2b5a0, 0xc9a0b8];
+  const buildings = [];
+  for (let i = 0; i < 44; i++) {
+    const s = i % 2 ? 1 : -1, h = rand(8, 34), w = rand(5, 10);
+    const b = new THREE.Mesh(G.box, new THREE.MeshLambertMaterial({ color: BCOLS[i % BCOLS.length], map: windowTex }));
+    b.scale.set(w, h, w); b.userData.s = s;
+    b.position.set(s * rand(38, 75), h / 2 - 2.2, -i * 9 + rand(-3, 3));
+    world.add(b); buildings.push(b);
+  }
+  const palms = [];
+  function makePalm() {
+    const g = new THREE.Group();
+    const sand = mesh(G.lowSphere, R.sand, 3, .6, 2.2); sand.position.y = -2.2; g.add(sand);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.18, .28, 6, 8), R.trunk); trunk.position.y = 1; trunk.rotation.z = .12; g.add(trunk);
+    const leafGeo = new THREE.PlaneGeometry(3, .7); leafGeo.translate(1.5, 0, 0);
+    for (let k = 0; k < 7; k++) { const l = new THREE.Mesh(leafGeo, R.palmLeaf); l.position.set(.35, 4, 0); l.rotation.set(0, k / 7 * Math.PI * 2, -.45); g.add(l); }
+    world.add(g); return g;
+  }
+  for (let i = 0; i < 6; i++) { const p = makePalm(); const s = i % 2 ? 1 : -1; p.userData.s = s; p.position.set(s * rand(13, 22), 0, -i * 30 - 10); palms.push(p); }
+
+  function makeDanfo() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(G.box, [R.danfo, R.danfo, R.danfoTop, R.tyre, R.danfoTop, R.danfoTop]); body.scale.set(1.5, 1.3, 3.6); body.position.y = .95; g.add(body);
+    const top = mesh(G.box, R.danfoTop, 1.5, .12, 3.4); top.position.y = 1.66; g.add(top);
+    for (const x of [-.75, .75]) for (const z of [-1.15, 1.15]) {
+      const w = new THREE.Mesh(G.cyl, R.tyre); w.scale.set(.32, .2, .32); w.rotation.z = Math.PI / 2; w.position.set(x, .32, z); g.add(w);
+    }
+    world.add(g); return g;
+  }
+  function makeKeke() {
+    const g = new THREE.Group();
+    const body = mesh(G.sphere, R.kekeBody, .6, .55, .95); body.position.y = .75; g.add(body);
+    const roof = mesh(G.box, R.danfoTop, 1.1, .1, 1.7); roof.position.y = 1.55; g.add(roof);
+    for (const x of [-.5, .5]) { const p = mesh(G.box, R.tyre, .06, .7, .06); p.position.set(x, 1.2, .6); g.add(p); }
+    for (const [x, z] of [[-.5, .5], [.5, .5], [0, -.75]]) {
+      const w = new THREE.Mesh(G.cyl, R.tyre); w.scale.set(.25, .14, .25); w.rotation.z = Math.PI / 2; w.position.set(x, .25, z); g.add(w);
+    }
+    world.add(g); return g;
+  }
+  const vehicles = [
+    { m: makeDanfo(), x: -4.5, v: 13 }, { m: makeKeke(), x: 4.5, v: 11 },
+    { m: makeDanfo(), x: 4.5, v: 15 }, { m: makeKeke(), x: -4.5, v: 9 },
+  ];
+  vehicles.forEach((o, i) => { o.m.position.set(o.x, 0, -20 - i * 25); o.m.rotation.y = Math.PI; });
+
+  /* ---------- obstacles and pickups ---------- */
+  const items = [];
+  function addItem(kind, lane, z, y = 0) {
+    let m;
+    if (kind === 'block') {
+      const i = Math.floor(Math.random() * 6);
+      m = new THREE.Mesh(G.box, [0, 1, 2, 3, 4, 5].map(k => blockMats[(i + k) % 6]));
+      m.scale.setScalar(.75); m.position.y = .375; m.rotation.y = rand(-.3, .3);
+    } else if (kind === 'ball') {
+      m = mesh(G.sphere, R.ball, .38); m.position.y = .38;
+    } else if (kind === 'pearl') {
+      m = mesh(G.sphere, M.pearl, .17); m.position.y = .55 + y;
+    } else {
+      m = new THREE.Group();
+      const b = mesh(G.cyl, R.bottle, .14, .42, .14); b.position.y = .21; m.add(b);
+      const milk = mesh(G.cyl, R.milk, .12, .3, .12); milk.position.y = .16; m.add(milk);
+      const capM = mesh(G.cyl, M.blush, .15, .08, .15); capM.position.y = .46; m.add(capM);
+      const teat = mesh(G.sphere, M.bowKnot, .07, .1, .07); teat.position.y = .55; m.add(teat);
+      m.position.y = .3;
+    }
+    const holder = new THREE.Group(); holder.add(m);
+    holder.position.set(LANES[lane], 0, z);
+    if (kind === 'block' || kind === 'ball') { const sh = mesh(G.shadow, M.shadow, kind === 'ball' ? .38 : .5); sh.position.y = .015; holder.add(sh); }
+    world.add(holder);
+    items.push({ kind, lane, z, m, holder, baseY: m.position.y, gone: false, fly: 0 });
+  }
+  function clearItems() { for (const it of items) world.remove(it.holder); items.length = 0; }
+
+  function spawnRow(z) {
+    // Never block all three lanes: one obstacle lane, pearls in another.
+    const obstLane = Math.floor(Math.random() * 3);
+    const roll = Math.random();
+    if (roll < .78) addItem(Math.random() < .55 ? 'block' : 'ball', obstLane, z);
+    const pl = (obstLane + 1 + Math.floor(Math.random() * 2)) % 3;
+    if (Math.random() < .35 && roll < .78) {
+      // An arc of pearls over the obstacle, to reward jumping.
+      for (let k = -2; k <= 2; k++) addItem('pearl', obstLane, z + k * .9, 1.1 - k * k * .2);
+    } else {
+      for (let k = 0; k < 5; k++) addItem('pearl', pl, z - k * 1.4);
+    }
+    if (S.hearts < 3 && Math.random() < .12) addItem('bottle', 3 - obstLane - pl, z - 3);
+  }
+
+  /* ---------- state ---------- */
+  const R0 = { z: 0, speed: 0, stage: 0, lane: 1, x: 0, y: 0, vy: 0, jumps: 0, ph: 0, ms: 0, nextSpawn: 0, wave: 0, turn: 0, waveT: 0, startZ: 0, dist: 0 };
+  const st = { ...R0 };
+  let touch = null;
+  const tmpV = new THREE.Vector3();
+
+  function moveLane(d) { const n = THREE.MathUtils.clamp(st.lane + d, 0, 2); if (n !== st.lane) { st.lane = n; sfx.swish(); } }
+  function jump() { if (st.jumps < 2) { st.vy = st.jumps ? 6.2 : 7.2; st.jumps++; sfx.jump(); } }
+
+  return {
+    id: 'run',
+    startBanner: 'Crawl, Pearl, crawl!',
+    hint: 'Swipe to change lanes. Tap to jump.',
+    world, st,
+    enter() {
+      world.visible = true; scene.background = sky; scene.fog = fog;
+      setMermaid(P, false);
+    },
+    exit() { world.visible = false; clearItems(); },
+    start() {
+      clearItems();
+      Object.assign(st, { speed: STAGE_SPEED[0], stage: 0, lane: 1, y: 0, vy: 0, jumps: 0, ms: 0, nextSpawn: st.z - 24, wave: 0, turn: 0, waveT: 0, startZ: st.z, dist: 0 });
+    },
+    scoreText() { return `${S.pearls} pearls · ${Math.floor(st.dist)} m`; },
+    finish(bank) {
+      const m = Math.floor(st.dist), best = store.get('pw_best', 0);
+      const rec = m > best; if (rec) store.set('pw_best', m);
+      return {
+        eyebrow: rec ? 'New longest walk' : 'Walk complete',
+        title: S.pearls >= 30 ? 'Amazing, Pearl!' : 'Well done, Pearl!',
+        text: `Pearl went ${m} m across the bridge and picked up ${S.pearls} pearls. Piggy bank: ${bank} pearls.`,
+      };
+    },
+    update(dt) {
+      const playing = S.mode === 'play';
+      st.speed = playing ? damp(st.speed, STAGE_SPEED[st.stage] + (st.stage === 2 ? Math.min(3, st.dist / 900) : 0), 1.5, dt) : damp(st.speed, 0, 3, dt);
+      st.z -= st.speed * dt;
+      if (playing) {
+        st.dist = st.startZ - st.z;
+        if (Math.floor(st.dist) !== st.shownDist) { st.shownDist = Math.floor(st.dist); hud(); }
+      }
+
+      st.x = damp(st.x, playing || S.mode === 'over' ? LANES[st.lane] : 0, 12, dt);
+      st.vy -= 20 * dt; st.y += st.vy * dt;
+      if (st.y <= 0) { st.y = 0; st.vy = 0; st.jumps = 0; }
+      const air = st.y > .02;
+      const stage = playing ? st.stage : 1, idle = !playing && st.speed < .6;
+      st.ph += dt * (stage === 0 ? 1.6 : stage === 1 ? 1.3 : 1.15) * Math.max(st.speed, 1);
+      if (st.waveT > 0) st.waveT -= dt;
+      st.turn = damp(st.turn, st.waveT > 0 ? 1 : 0, 6, dt);
+      st.wave = damp(st.wave, st.waveT > 0 || !playing ? 1 : 0, 6, dt);
+      posePearl(P, { ph: st.ph, stage, air, turn: st.turn, wave: st.wave, idle, t: S.t });
+      P.root.position.set(st.x, st.y, st.z);
+      P.root.rotation.set(0, 0, (LANES[st.lane] - st.x) * -.12);
+      P.shadow.position.y = .015 - st.y; P.shadow.scale.setScalar(Math.max(.15, .38 - st.y * .12));
+
+      if (playing) {
+        const next = MILESTONES[st.ms];
+        if (next && st.dist >= next.m) {
+          st.ms++; banner(next.t); sfx.yay(); confetti.burst(tmpV.set(st.x, 1.2, st.z - 1), 60);
+          if (next.stage != null) st.stage = next.stage;
+          st.waveT = 1.8;
+          // Clear the way while she turns round to wave at Daddy.
+          for (const it of items) if (!it.gone && (it.kind === 'block' || it.kind === 'ball') && it.z < st.z && it.z > st.z - st.speed * 3) { it.gone = true; it.fly = 1; }
+        }
+        while (st.nextSpawn > st.z - 70) { spawnRow(st.nextSpawn); st.nextSpawn -= rand(9, 14) + st.speed * .4; }
+      }
+
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        if (it.kind === 'pearl') { it.m.position.y = it.baseY + Math.sin(S.t * 4 + it.z) * .06; it.m.rotation.y += dt * 2; }
+        if (it.kind === 'bottle') it.m.rotation.y += dt * 2.5;
+        if (it.fly > 0) {
+          it.fly -= dt * 1.4; it.holder.position.y += dt * 9; it.holder.position.x += dt * (it.lane - 1 || 1) * 5;
+          it.m.rotation.x += dt * 8; it.holder.scale.setScalar(Math.max(.01, it.fly));
+          if (it.fly <= 0) { world.remove(it.holder); items.splice(i, 1); }
+          continue;
+        }
+        if (it.z > st.z + 8) { world.remove(it.holder); items.splice(i, 1); continue; }
+        if (!playing || it.gone) continue;
+        const dz = Math.abs(it.z - st.z), dx = Math.abs(LANES[it.lane] - st.x);
+        if (it.kind === 'pearl') {
+          if (dz < .6 && dx < .6 && Math.abs(it.m.position.y - (st.y + .6)) < .7) {
+            world.remove(it.holder); items.splice(i, 1);
+            S.pearls++; sfx.pearl(); confetti.burst(tmpV.set(LANES[it.lane], it.m.position.y, it.z), 4); hud();
+          }
+        } else if (it.kind === 'bottle') {
+          if (dz < .6 && dx < .6 && st.y < .8) {
+            world.remove(it.holder); items.splice(i, 1);
+            S.hearts = Math.min(3, S.hearts + 1); sfx.heart(); banner('Milk time! +1 heart'); hud();
+          }
+        } else if (dz < .55 && dx < .62 && st.y < (it.kind === 'block' ? .72 : .66) && S.inv <= 0) {
+          it.gone = true; it.fly = 1;
+          hurt(S.hearts === 2 ? 'Careful, Pearl! One heart left' : 'Oopsie! Up you get');
+        }
+      }
+
+      for (const g of segments) if (g.position.z > st.z + SEG * 1.5) g.position.z -= SEG * segments.length;
+      for (const p of pylons) if (p.position.z > st.z + 30) p.position.z -= PYLON_GAP * pylons.length;
+      for (const b of buildings) if (b.position.z > st.z + 40) { b.position.z -= 44 * 9; b.position.x = b.userData.s * rand(38, 75); }
+      for (const p of palms) if (p.position.z > st.z + 25) p.position.z -= 6 * 30;
+      for (const v of vehicles) {
+        v.m.position.z -= v.v * dt * (S.mode === 'over' ? .4 : 1);
+        if (v.m.position.z < st.z - 160) v.m.position.z = st.z + rand(15, 40);
+        if (v.m.position.z > st.z + 40) v.m.position.z = st.z - rand(60, 150);
+      }
+      water.position.z = st.z - 150; sunDisc.position.set(0, 26, st.z - 330);
+      key.position.set(st.x - 4, 10, st.z + 8); key.target.position.set(st.x, 0, st.z);
+      sunLight.position.set(st.x + 2, 4, st.z - 10); sunLight.target.position.set(st.x, .8, st.z);
+      for (const f of flags) {
+        const a = f.geo.attributes.position;
+        for (let i = 0; i < a.count; i++) { const x = f.base[i * 3]; a.setZ(i, Math.sin(x * 2.4 - S.t * 6) * .16 * x / 2); }
+        a.needsUpdate = true;
+      }
+    },
+    // e: 0 = in front of Pearl (menu, end card), 1 = chasing behind her.
+    placeCamera(camera, e, wide, front, behind, look) {
+      front.set(st.x - .8, 1.25, st.z - 3.4);
+      behind.set(st.x * .55, 3.1, st.z + 5.4);
+      camera.position.lerpVectors(front, behind, e);
+      camera.position.x += Math.sin(e * Math.PI) * 2.5;
+      look.set(lerp(st.x - (wide ? 1.3 : 0), st.x * .35, e), lerp(wide ? .75 : -.2, .7, e) + st.y * .3 * e, lerp(st.z, st.z - 7, e));
+      camera.lookAt(look);
+    },
+    pointerDown(e) { touch = { x: e.clientX, y: e.clientY, t: performance.now(), used: false }; },
+    pointerMove(e) {
+      if (!touch || touch.used) return;
+      const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
+      if (Math.abs(dx) > 28 && Math.abs(dx) > Math.abs(dy)) { moveLane(dx > 0 ? 1 : -1); touch.used = true; }
+      else if (dy < -34 && Math.abs(dy) > Math.abs(dx)) { jump(); touch.used = true; }
+    },
+    pointerUp() { if (touch && !touch.used && performance.now() - touch.t < 450) jump(); touch = null; },
+    keyDown(e) {
+      const k = e.key;
+      if (k === 'ArrowLeft' || k === 'a') { e.preventDefault(); moveLane(-1); }
+      if (k === 'ArrowRight' || k === 'd') { e.preventDefault(); moveLane(1); }
+      if ((k === ' ' || k === 'ArrowUp' || k === 'w') && !e.repeat) { e.preventDefault(); jump(); }
+    },
+    keyUp() {},
+  };
+}
