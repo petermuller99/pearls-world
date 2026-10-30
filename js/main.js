@@ -2,7 +2,7 @@
 // banner, pause, end card, piggy bank) and the render loop. Each game lives in its own module.
 import { THREE, $, store, damp, makePearl, applyPhoto, applyLook, makeConfetti, LOOKS, DEFAULT_LOOK } from './common.js';
 import { audio, sfx, unlock, setSfx, setMusic, playMusic, stopMusic, setMusicLevel, pauseAudio, resumeAudio } from './audio.js';
-import { createPowers, GAP_MAX, GAP_START, DIFFICULTY } from './chase.js';
+import { createPowers, GAP_MAX, GAP_START, DIFFICULTY, MUM_LOOKS, DEFAULT_MUM, applyMumLook, setMumPhoto } from './chase.js';
 import { DAD_LOOKS, DEFAULT_DAD, applyDadLook, setDadPhoto } from './daddy.js';
 import { loadUpgrades, saveUpgrades, upgradeEffects, renderShop } from './shop.js';
 import { createRunner } from './runner.js';
@@ -197,11 +197,6 @@ function cropPhoto(input, done) {
   fr.readAsDataURL(f);
   input.value = '';
 }
-$('photo').addEventListener('change', e => cropPhoto(e.target, url => {
-  store.set('pw_face', url); showPhotoButtons();
-  // Match her body to the skin tone in the photo.
-  applyPhoto(P, url, tone => { if (tone) { look.skin = tone; look.photoSkin = tone; saveLook(); } });
-}));
 $('clearPhoto').onclick = () => { store.remove('pw_face'); applyPhoto(P, null); showPhotoButtons(); };
 
 /* ---------- Pearl's look ---------- */
@@ -254,9 +249,31 @@ $('dadPhoto').addEventListener('change', e => cropPhoto(e.target, url => {
   setDadPhoto(url, tone => { if (tone) { dadLook.skin = tone; dadLook.photoSkin = tone; } saveDad(); });
 }));
 $('clearDadPhoto').onclick = () => { store.remove('pw_dad_face'); setDadPhoto(null); buildDad(); };
+/* ---------- Mummy's look ---------- */
+let mumLook = { ...DEFAULT_MUM, ...store.get('pw_mum_look', {}) };
+applyMumLook(mumLook);
+setMumPhoto(store.get('pw_mum_face', null));
+function saveMum() { store.set('pw_mum_look', mumLook); applyMumLook(mumLook); buildMum(); }
+function buildMum() {
+  const chip = (b, v, label) => { b.className = 'chip'; b.textContent = label; };
+  const skins = mumLook.photoSkin && !LOOKS.skin.includes(mumLook.photoSkin) ? [...LOOKS.skin, [mumLook.photoSkin, 'From photo']] : LOOKS.skin;
+  chipRow($('mumSkin'), skins, 'skin', (b, v, label) => { swatch(b, v, label === v ? 'Skin tone' : label); if (label === 'From photo') { b.className = 'sw photo'; b.textContent = 'From photo'; } }, mumLook, saveMum);
+  const fabric = (b, v) => { swatch(b, LOOKS.outfit[v][0], v + ' ankara'); b.style.background = `radial-gradient(circle at 50% 50%, ${LOOKS.outfit[v][2]} 0 4px, ${LOOKS.outfit[v][1]} 4px 9px, ${LOOKS.outfit[v][0]} 9px)`; };
+  chipRow($('mumGele'), Object.keys(LOOKS.outfit), 'gele', fabric, mumLook, saveMum);
+  chipRow($('mumOutfit'), Object.keys(LOOKS.outfit), 'outfit', fabric, mumLook, saveMum);
+  for (const k of ['hair', 'earrings', 'glasses']) chipRow($('mum' + k[0].toUpperCase() + k.slice(1)), MUM_LOOKS[k], k, chip, mumLook, saveMum);
+  $('clearMumPhoto').hidden = !store.get('pw_mum_face', null);
+}
+$('mumPhoto').addEventListener('change', e => cropPhoto(e.target, url => {
+  store.set('pw_mum_face', url);
+  setMumPhoto(url, tone => { if (tone) { mumLook.skin = tone; mumLook.photoSkin = tone; } saveMum(); });
+}));
+$('clearMumPhoto').onclick = () => { store.remove('pw_mum_face'); setMumPhoto(null); buildMum(); };
+$('mumBtn').onclick = () => { unlock(); sfx.click(); buildMum(); $('menu').hidden = true; $('mumPanel').hidden = false; };
+$('mumDone').onclick = () => { sfx.click(); $('mumPanel').hidden = true; $('menu').hidden = false; };
 $('dadBtn').onclick = () => { unlock(); sfx.click(); buildDad(); $('menu').hidden = true; $('dadPanel').hidden = false; };
 $('dadDone').onclick = () => { sfx.click(); $('dadPanel').hidden = true; $('menu').hidden = false; };
-for (const id of ['photo', 'dadPhoto']) document.querySelector(`label[for=${id}]`).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
+for (const id of ['mumPhoto', 'dadPhoto']) document.querySelector(`label[for=${id}]`).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
 
 // Install on phone (works offline).
 let installEv = null;
@@ -316,7 +333,7 @@ function update(dt) {
   const e = S.cam * S.cam * (3 - 2 * S.cam);
   game.placeCamera(camera, e, camera.aspect > 1.2, front, behind, camTarget);
   // While the look panel is open in portrait, slide the picture up so Pearl stands above the panel.
-  S.lift = damp(S.lift || 0, (!$('lookPanel').hidden || !$('shopPanel').hidden || !$('dadPanel').hidden) && camera.aspect < 1.2 ? .07 : 0, 6, dt);
+  S.lift = damp(S.lift || 0, (!$('lookPanel').hidden || !$('shopPanel').hidden || !$('dadPanel').hidden || !$('mumPanel').hidden) && camera.aspect < 1.2 ? .07 : 0, 6, dt);
   const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
   if (S.lift > .002) camera.setViewOffset(w, h, 0, h * S.lift, w, h); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) $('banner').classList.add('off'); }
