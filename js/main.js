@@ -5,6 +5,7 @@ import { audio, sfx, unlock, setSfx, setMusic, playMusic, stopMusic, setMusicLev
 import { createPowers, GAP_MAX, GAP_START, DIFFICULTY, MUM_LOOKS, DEFAULT_MUM, applyMumLook, setMumPhoto } from './chase.js';
 import { DAD_LOOKS, DEFAULT_DAD, applyDadLook, setDadPhoto } from './daddy.js';
 import { loadUpgrades, saveUpgrades, upgradeEffects, renderShop } from './shop.js';
+import { createGfx } from './gfx.js';
 import { createRunner } from './runner.js';
 import { createHunt } from './hunt.js';
 
@@ -16,12 +17,11 @@ try {
   $('menu').hidden = true; $('nogl').hidden = false;
   throw e;
 }
-let pixelRatio = Math.min(devicePixelRatio || 1, 2);
-renderer.setPixelRatio(pixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 400);
+const gfx = createGfx(renderer, scene, camera);
 function resize() {
   const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
   renderer.setSize(w, h, false);
@@ -30,6 +30,7 @@ function resize() {
   const hFov = 64 * Math.PI / 180;
   camera.fov = THREE.MathUtils.clamp(2 * Math.atan(Math.tan(hFov / 2) / camera.aspect) * 180 / Math.PI, 50, 78);
   camera.updateProjectionMatrix();
+  gfx.resize(w, h);
 }
 addEventListener('resize', resize);
 
@@ -102,10 +103,12 @@ const ctx = { scene, P, confetti, S, hurt, boost, mumSay, say, banner, hud: () =
 const games = { run: createRunner(ctx), dive: createHunt(ctx) };
 let game = games[store.get('pw_last', 'run')] || games.run;
 game.enter();
+gfx.setShadowLight(game.shadowLight);
+gfx.init();
 
 function switchTo(id) {
   if (game.id === id) return;
-  game.exit(); game = games[id]; game.enter();
+  game.exit(); game = games[id]; game.enter(); gfx.setShadowLight(game.shadowLight);
   store.set('pw_last', id);
 }
 function start(id) {
@@ -153,6 +156,13 @@ for (const b of document.querySelectorAll('#difficulty button')) {
   b.onclick = () => { unlock(); sfx.click(); diffKey = b.dataset.d; S.diff = DIFFICULTY[diffKey]; store.set('pw_difficulty', diffKey); showDifficulty(); };
 }
 showDifficulty();
+
+/* ---------- graphics setting ---------- */
+function showGfx() {
+  for (const b of document.querySelectorAll('#gfx button')) b.setAttribute('aria-pressed', String(b.dataset.g === gfx.setting));
+}
+for (const b of document.querySelectorAll('#gfx button')) b.onclick = () => { unlock(); sfx.click(); gfx.setSetting(b.dataset.g); resize(); showGfx(); };
+showGfx();
 
 /* ---------- pause ---------- */
 function setPaused(on) {
@@ -339,15 +349,16 @@ function update(dt) {
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) $('banner').classList.add('off'); }
 }
 
-// Quality step-down for slower phones: drop the pixel ratio if frames keep running long.
+// Quality step-down for slower phones: if frames keep running long, Auto switches
+// effects off (and High lowers the resolution).
 let last = performance.now(), slow = 0, checkT = 0;
 function frame(now) {
   const raw = (now - last) / 1000, dt = Math.min(.05, raw); last = now;
   if (!S.paused) update(reduced && S.mode === 'menu' ? dt * .3 : dt);
-  renderer.render(scene, camera);
+  gfx.render(dt);
   checkT += raw; if (raw > 1 / 40) slow++;
   if (checkT > 2) {
-    if (slow > 50 && pixelRatio > 1) { pixelRatio = Math.max(1, pixelRatio - .5); renderer.setPixelRatio(pixelRatio); resize(); }
+    if (!document.hidden && gfx.slowFrames(slow, resize)) showGfx();
     checkT = 0; slow = 0;
   }
   requestAnimationFrame(frame);
@@ -355,5 +366,5 @@ function frame(now) {
 resize(); setSound(); updateBank(); showPhotoButtons(); hud();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // Test hook: lets automated checks fast-forward the game.
-if (location.search.includes('debug')) window.__pw = { S, update, games, get game() { return game; }, start, powers, setPaused };
+if (location.search.includes('debug')) window.__pw = { S, update, games, get game() { return game; }, start, powers, setPaused, gfx };
 requestAnimationFrame(frame);

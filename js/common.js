@@ -104,8 +104,12 @@ export const M = {
   shadow: new THREE.MeshBasicMaterial({ color: COL.ink, transparent: true, opacity: .28, depthWrite: false }),
   pearl: new THREE.MeshStandardMaterial({ color: 0xfff8f0, roughness: .15, metalness: .1, emissive: 0x6a5a70, emissiveIntensity: .35 }),
 };
+// Cartoon outlines (High graphics) are drawn only around materials flagged here: the family and the cheeky attackers.
+export function outlined(...mats) { for (const m of mats) if (m) m.userData.outline = true; }
+outlined(M.skin, M.hair, M.dress, M.shoe, M.tail, M.fin, M.blush, M.bow, M.gele, M.lace, M.sock, M.bowKnot);
+
 export const G = {
-  sphere: new THREE.SphereGeometry(1, 20, 14),
+  sphere: new THREE.SphereGeometry(1, 28, 18),
   lowSphere: new THREE.SphereGeometry(1, 10, 8),
   box: new THREE.BoxGeometry(1, 1, 1),
   shadow: new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2),
@@ -197,15 +201,20 @@ export function makePearl() {
   }
 
   const face = new THREE.Group(); head.add(face);
+  const eyes = [];
   for (const s of [-1, 1]) {
-    const eye = mesh(G.sphere, M.eye, .052, .056, .045); eye.position.set(s * .13, .03, .333); face.add(eye);
-    const hi = mesh(G.sphere, M.white, .016); hi.position.set(s * .13 + .017, .052, .375); face.add(hi);
+    // Each eye and its sparkle sit in a group that squashes flat to blink.
+    const eyeG = new THREE.Group(); eyeG.position.set(s * .13, .03, .333); face.add(eyeG); eyes.push(eyeG);
+    eyeG.add(mesh(G.sphere, M.eye, .052, .056, .045));
+    const hi = mesh(G.sphere, M.white, .016); hi.position.set(.017, .022, .042); eyeG.add(hi);
     const ch = mesh(G.sphere, M.cheek, .085, .06, .02); ch.position.set(s * .21, -.1, .35); ch.lookAt(s * .6, -.25, 1.2); face.add(ch);
     // Round chubby cheeks.
     const chub = mesh(G.sphere, M.skin, .14, .12, .1); chub.position.set(s * .17, -.12, .25); face.add(chub);
   }
   const smile = new THREE.Mesh(new THREE.TorusGeometry(.08, .016, 6, 14, Math.PI), M.eye);
   smile.rotation.z = Math.PI; smile.position.set(0, -.07, .335); face.add(smile);
+  // A little round "oh!" mouth for bumps.
+  const mouthO = mesh(G.sphere, M.eye, .045, .055, .02); mouthO.position.set(0, -.12, .335); mouthO.visible = false; face.add(mouthO);
 
   // Photo face: a curved patch on the front of the head, shown when Daddy has added a photo.
   const photoMat = new THREE.MeshLambertMaterial({ transparent: true });
@@ -215,7 +224,7 @@ export function makePearl() {
 
   const shadow = mesh(G.shadow, M.shadow, .38); shadow.position.y = .015; root.add(shadow);
 
-  return { dress, root, inner, hips, torso, head, arms, legs, tail, tailSegs, face, photo, photoMat, shadow, cap, hairs, bow, headband };
+  return { dress, root, inner, hips, torso, head, arms, legs, tail, tailSegs, face, photo, photoMat, shadow, cap, hairs, bow, headband, eyes, smile, mouthO, seed: Math.random() * 10 };
 }
 
 export function setMermaid(P, on) {
@@ -278,7 +287,7 @@ function skinFromPhoto(im) {
 // Poses: stage 0 crawl, 1 toddle, 2 run, or `swim` for the mermaid.
 // `turn` spins her round to face the chase camera, `wave` lifts her right hand,
 // `idle` holds her still (menu and end card).
-export function posePearl(P, { ph, stage = 1, air = false, turn = 0, wave = 0, idle = false, t = 0, swim = false, reach = 0 }) {
+export function posePearl(P, { ph, stage = 1, air = false, turn = 0, wave = 0, idle = false, t = 0, swim = false, reach = 0, oops = false }) {
   const sw = Math.sin(ph), cw = Math.cos(ph);
   let hipY, lean, headX, armX = [0, 0], armZ = [0, 0], legX = [0, 0], bob = 0, roll = 0, tailX = 0;
   if (swim) {
@@ -322,6 +331,11 @@ export function posePearl(P, { ph, stage = 1, air = false, turn = 0, wave = 0, i
   P.arms.forEach((a, i) => a.rotation.set(armX[i], 0, armZ[i]));
   P.legs.forEach((l, i) => l.rotation.set(legX[i], 0, 0));
   P.inner.rotation.y = Math.PI * (1 - turn);
+  // Blink every few seconds (each figure on its own rhythm), and an "oh!" face after a bump.
+  const b = (t + P.seed) % 3.7;
+  const lid = oops ? 1.25 : b < .12 ? .1 : 1;
+  P.eyes.forEach(e => { e.scale.y = Math.min(1.25, lid); });
+  P.smile.visible = !oops; P.mouthO.visible = oops;
 }
 
 /* ---------- confetti ---------- */
