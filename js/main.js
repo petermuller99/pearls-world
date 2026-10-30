@@ -1,6 +1,7 @@
 // Pearl's World 3D: the menu, the shared game flow (hearts, pearls, milestones banner,
 // end card, piggy bank) and the render loop. Each game lives in its own module.
-import { THREE, $, store, damp, makePearl, applyPhoto, makeConfetti, audio, sfx } from './common.js';
+import { THREE, $, store, damp, makePearl, applyPhoto, applyLook, makeConfetti, LOOKS, DEFAULT_LOOK } from './common.js';
+import { audio, sfx, unlock, setSfx, setMusic, playMusic, stopMusic, setMusicLevel } from './audio.js';
 import { createRunner } from './runner.js';
 import { createHunt } from './hunt.js';
 
@@ -34,6 +35,8 @@ const S = { mode: 'menu', t: 0, hearts: 3, pearls: 0, inv: 0, cam: 0, paused: fa
 let bank = store.get('pw_bank', 0);
 const P = makePearl();
 scene.add(P.root);
+let look = { ...DEFAULT_LOOK, ...store.get('pw_look', {}) };
+applyLook(P, look);
 applyPhoto(P, store.get('pw_face', null));
 const confetti = makeConfetti(scene);
 
@@ -44,13 +47,17 @@ function hud() {
   $('hearts').setAttribute('aria-label', S.hearts + ' hearts');
   $('score').textContent = game.scoreText();
 }
-function hurt(msg) {
-  S.hearts--; S.inv = 1.4; sfx.hit(); hud();
+function hurt(msg, sound = sfx.hit) {
+  S.hearts--; S.inv = 1.4; sound(); sfx.oops(); hud();
   if (S.hearts <= 0) endGame(); else banner(msg);
+}
+function levelUp(lv) {
+  sfx.levelUp(); setMusicLevel(lv);
+  banner(`Level ${lv}! Faster!`);
 }
 function updateBank() { $('bank').textContent = bank; $('best').textContent = store.get('pw_best', 0); }
 
-const ctx = { scene, P, confetti, S, hurt, banner, hud: () => hud(), camera };
+const ctx = { scene, P, confetti, S, hurt, banner, hud: () => hud(), camera, levelUp };
 const games = { run: createRunner(ctx), dive: createHunt(ctx) };
 let game = games[store.get('pw_last', 'run')] || games.run;
 game.enter();
@@ -61,17 +68,19 @@ function switchTo(id) {
   store.set('pw_last', id);
 }
 function start(id) {
+  unlock(); sfx.start();
   switchTo(id);
   confetti.clear();
   Object.assign(S, { mode: 'play', hearts: 3, pearls: 0, inv: 0 });
   game.start();
   $('menu').hidden = true; $('over').hidden = true; $('hud').hidden = false;
   hud(); banner(game.startBanner);
+  playMusic(game.id);
   const hint = $('hint'); hint.textContent = game.hint; hint.classList.remove('off');
   clearTimeout(start.hintTimer); start.hintTimer = setTimeout(() => hint.classList.add('off'), 4500);
 }
 function toMenu() {
-  S.mode = 'menu';
+  S.mode = 'menu'; stopMusic();
   $('over').hidden = true; $('hud').hidden = true; $('menu').hidden = false; $('banner').classList.add('off'); $('hint').classList.add('off');
   updateBank();
 }
@@ -79,6 +88,7 @@ function endGame() {
   if (S.mode !== 'play') return;
   S.mode = 'over';
   bank += S.pearls; store.set('pw_bank', bank);
+  stopMusic(); sfx.gameOver();
   const info = game.finish(bank);
   $('overEyebrow').textContent = info.eyebrow; $('overTitle').textContent = info.title; $('overText').textContent = info.text;
   setTimeout(() => { if (S.mode === 'over') { $('hud').hidden = true; $('over').hidden = false; } }, 900);
@@ -97,10 +107,11 @@ for (const [btn, id] of [['playRun', 'run'], ['playDive', 'dive']]) {
 }
 
 function setSound() {
-  const b = $('soundBtn'); b.setAttribute('aria-pressed', String(!audio.muted));
-  b.setAttribute('aria-label', audio.muted ? 'Sound off' : 'Sound on'); b.style.opacity = audio.muted ? .45 : 1;
+  $('soundBtn').setAttribute('aria-pressed', String(audio.sfxOn));
+  $('musicBtn').setAttribute('aria-pressed', String(audio.musicOn));
 }
-$('soundBtn').onclick = () => { audio.muted = !audio.muted; store.set('pw_mute', audio.muted); setSound(); };
+$('soundBtn').onclick = () => { unlock(); setSfx(!audio.sfxOn); setSound(); sfx.click(); };
+$('musicBtn').onclick = () => { unlock(); setMusic(!audio.musicOn); setSound(); };
 
 // Photo: centre-cropped to 200x200 and kept on this phone only.
 function showPhotoButtons() { $('clearPhoto').hidden = !store.get('pw_face', null); }
@@ -114,7 +125,9 @@ $('photo').addEventListener('change', e => {
       const k = Math.min(im.width, im.height);
       c.getContext('2d').drawImage(im, (im.width - k) / 2, (im.height - k) * .3, k, k, 0, 0, 200, 200);
       const url = c.toDataURL('image/jpeg', .85);
-      store.set('pw_face', url); applyPhoto(P, url); showPhotoButtons();
+      store.set('pw_face', url); showPhotoButtons();
+      // Match her body to the skin tone in the photo.
+      applyPhoto(P, url, tone => { if (tone) { look.skin = tone; look.photoSkin = tone; saveLook(); } });
     };
     im.src = fr.result;
   };
@@ -122,6 +135,35 @@ $('photo').addEventListener('change', e => {
   e.target.value = '';
 });
 $('clearPhoto').onclick = () => { store.remove('pw_face'); applyPhoto(P, null); showPhotoButtons(); };
+
+/* ---------- Pearl's look ---------- */
+function saveLook() { store.set('pw_look', look); applyLook(P, look); buildLook(); }
+function chipRow(el, options, key, render) {
+  el.textContent = '';
+  for (const opt of options) {
+    const [value, label] = Array.isArray(opt) ? opt : [opt, opt];
+    const b = document.createElement('button');
+    render(b, value, label);
+    b.setAttribute('aria-pressed', String(look[key] === value));
+    b.onclick = () => { sfx.click(); look[key] = value; saveLook(); };
+    el.appendChild(b);
+  }
+}
+const swatch = (b, v, label) => {
+  b.className = 'sw' + (v === 'none' ? ' none' : '');
+  if (v !== 'none') b.style.background = v;
+  b.setAttribute('aria-label', label === 'none' ? 'No bow' : label);
+};
+function buildLook() {
+  const skins = look.photoSkin && !LOOKS.skin.includes(look.photoSkin) ? [...LOOKS.skin, [look.photoSkin, 'From photo']] : LOOKS.skin;
+  chipRow($('lookSkin'), skins, 'skin', (b, v, label) => { swatch(b, v, label === v ? 'Skin tone' : label); if (label === 'From photo') { b.className = 'sw photo'; b.textContent = 'From photo'; } });
+  chipRow($('lookHair'), LOOKS.hair, 'hair', (b, v, label) => { b.className = 'chip'; b.textContent = label; });
+  chipRow($('lookHairColor'), LOOKS.hairColor, 'hairColor', (b, v) => swatch(b, v, 'Hair colour'));
+  chipRow($('lookBow'), LOOKS.bow, 'bow', (b, v) => swatch(b, v, v === 'none' ? 'none' : 'Bow colour'));
+  chipRow($('lookOutfit'), Object.keys(LOOKS.outfit), 'outfit', (b, v) => { swatch(b, LOOKS.outfit[v][0], v + ' ankara'); b.style.background = `radial-gradient(circle at 50% 50%, ${LOOKS.outfit[v][2]} 0 4px, ${LOOKS.outfit[v][1]} 4px 9px, ${LOOKS.outfit[v][0]} 9px)`; });
+}
+$('lookBtn').onclick = () => { unlock(); sfx.click(); buildLook(); $('menu').hidden = true; $('lookPanel').hidden = false; };
+$('lookDone').onclick = () => { sfx.click(); $('lookPanel').hidden = true; $('menu').hidden = false; };
 document.querySelector('label[for=photo]').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('photo').click(); } });
 
 // Install on phone (works offline).
@@ -144,7 +186,7 @@ addEventListener('keyup', e => game.keyUp(e));
 document.addEventListener('visibilitychange', () => { S.paused = document.hidden; });
 
 /* ---------- update and render ---------- */
-const front = new THREE.Vector3(), behind = new THREE.Vector3(), look = new THREE.Vector3();
+const front = new THREE.Vector3(), behind = new THREE.Vector3(), camTarget = new THREE.Vector3();
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function update(dt) {
   S.t += dt;
@@ -155,7 +197,11 @@ function update(dt) {
   const playing = S.mode === 'play';
   S.cam = damp(S.cam, playing ? 1 : 0, playing ? 2.2 : 1.6, dt);
   const e = S.cam * S.cam * (3 - 2 * S.cam);
-  game.placeCamera(camera, e, camera.aspect > 1.2, front, behind, look);
+  game.placeCamera(camera, e, camera.aspect > 1.2, front, behind, camTarget);
+  // While the look panel is open in portrait, slide the picture up so Pearl stands above the panel.
+  S.lift = damp(S.lift || 0, !$('lookPanel').hidden && camera.aspect < 1.2 ? .07 : 0, 6, dt);
+  const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+  if (S.lift > .002) camera.setViewOffset(w, h, 0, h * S.lift, w, h); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
   if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) $('banner').classList.add('off'); }
 }
 

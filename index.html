@@ -58,7 +58,18 @@ p{margin:0}
 .stats{display:flex;flex-direction:column;gap:4px;font:400 22px/1 var(--display);color:var(--pearl);text-shadow:2px 2px 0 var(--ink);font-variant-numeric:tabular-nums}
 #hearts{color:var(--blush);letter-spacing:2px}
 .ibs{display:flex;gap:8px;pointer-events:auto}
-.ib{width:44px;height:44px;border-radius:50%;border:3px solid var(--ink);background:var(--pearl);color:var(--ink);font:800 16px var(--body);cursor:pointer}
+.ib{width:44px;height:44px;border-radius:50%;border:3px solid var(--ink);background:var(--pearl);color:var(--ink);font:800 18px var(--body);cursor:pointer;display:grid;place-items:center;padding:0}
+.ib[aria-pressed=false]{opacity:.45;text-decoration:line-through}
+.look{gap:10px}
+.lrow{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:8px}
+.look h3{margin:0;font:800 13px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--lagoon)}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.sw{width:32px;height:32px;border-radius:50%;border:3px solid var(--ink);cursor:pointer;padding:0;position:relative}
+.sw[aria-pressed=true]{box-shadow:0 0 0 3px var(--pearl),0 0 0 6px var(--blush)}
+.sw.none{background:repeating-linear-gradient(45deg,var(--pearl) 0 5px,#ddd 5px 10px)}
+.sw.photo{font:800 11px var(--body);color:var(--pearl);width:auto;border-radius:999px;padding:0 10px;height:32px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.chip{font:800 13px var(--body);border:3px solid var(--ink);border-radius:999px;padding:6px 10px;background:var(--pearl);color:var(--ink);cursor:pointer}
+.chip[aria-pressed=true]{background:var(--sun)}
 #banner{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top,0px)) + 70px);transform:translateX(-50%);background:var(--pearl);border:3px solid var(--ink);border-radius:999px;padding:10px 20px;font:400 clamp(18px,5.5vw,26px)/1.1 var(--display);color:var(--coral);white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;pointer-events:none;transition:opacity .3s,transform .3s;box-sizing:border-box}
 #banner.off{opacity:0;transform:translateX(-50%) translateY(-10px)}
 #hint{position:absolute;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:rgba(36,22,61,.75);color:var(--pearl);border-radius:999px;padding:8px 16px;font:800 14px var(--body);white-space:nowrap;pointer-events:none;transition:opacity .6s}
@@ -77,7 +88,8 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
   <div id="hud" hidden>
     <div class="stats"><span id="hearts" aria-label="Hearts">♥♥♥</span><span id="score">0 pearls</span></div>
     <div class="ibs">
-      <button id="soundBtn" class="ib" aria-label="Sound on" aria-pressed="true">♪</button>
+      <button id="musicBtn" class="ib" aria-label="Music" aria-pressed="true">♫</button>
+      <button id="soundBtn" class="ib" aria-label="Sound effects" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
       <button id="homeBtn" class="ib" aria-label="Back to menu">✕</button>
     </div>
   </div>
@@ -91,6 +103,7 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
       <div class="row">
         <label class="btn" for="photo" tabindex="0">Add Pearl's photo</label>
         <input id="photo" type="file" accept="image/*" hidden>
+        <button class="btn alt" id="lookBtn">Pearl's look</button>
         <button id="clearPhoto" class="link" hidden>Use cartoon Pearl</button>
       </div>
       <div class="modes">
@@ -105,6 +118,19 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
       </div>
       <p class="bank">Piggy bank: <b id="bank">0</b> pearls · Longest walk: <b id="best">0</b> m</p>
       <button class="btn go install" id="installBtn" hidden>Put Pearl's World on this phone</button>
+    </div>
+  </section>
+
+  <section id="lookPanel" class="overlay" hidden>
+    <div class="panel look">
+      <h2>Pearl's look</h2>
+      <p class="small">Adding her photo matches her skin tone automatically.</p>
+      <div class="lrow"><h3>Skin</h3><div class="chips" id="lookSkin"></div></div>
+      <div class="lrow"><h3>Hair</h3><div class="chips" id="lookHair"></div></div>
+      <div class="lrow"><h3>Hair colour</h3><div class="chips" id="lookHairColor"></div></div>
+      <div class="lrow"><h3>Bow</h3><div class="chips" id="lookBow"></div></div>
+      <div class="lrow"><h3>Outfit</h3><div class="chips" id="lookOutfit"></div></div>
+      <div class="row"><button class="btn big go" id="lookDone">Done</button></div>
     </div>
   </section>
 

@@ -1,13 +1,17 @@
 // Pearl Hunt: Pearl the little mermaid swims toward -z through the lagoon.
 // Touch where you want her to go: she glides to that spot in the water in front of her.
-import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, sfx, textSprite, COL } from './common.js';
+import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, textSprite, COL } from './common.js';
+import { sfx } from './audio.js';
 
 const MILESTONES = [{ m: 10, t: 'Shiny!' }, { m: 25, t: 'Pearl collector!' }, { m: 50, t: 'Queen of the lagoon!' }, { m: 100, t: 'Ocean legend!' }, { m: 200, t: 'Richest baby in Lagos!' }];
 const X_MIN = -2.4, X_MAX = 2.4, Y_MIN = .6, Y_MAX = 4.2, HOME_Y = 1.8;
 const SEG = 20;
+// Difficulty: a new level every 25 seconds. She swims faster, jellyfish come more often
+// and start drifting sideways, and oysters stay open for less time.
+const LEVEL_EVERY = 25, MAX_LEVEL = 12, MAX_SPEED = 11;
 const GREETINGS = ['Hi Pearl!', 'Hello Pearl!', 'Bawo ni, Pearl!', 'Kedu, Pearl!', 'Sannu, Pearl!'];
 
-export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera }) {
+export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera, levelUp }) {
   const world = new THREE.Group(); world.visible = false; scene.add(world);
   const sky = gradientTex([[0, '#5fd8cc'], [.5, '#178ea0'], [1, '#0b3c5d']]);
   const fog = new THREE.Fog(0x1a8fa0, 6, 44);
@@ -39,6 +43,8 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
     corals: [COL.coral, COL.blush, COL.sun, 0x9b7bff, 0xff9f6b].map(c => new THREE.MeshLambertMaterial({ color: c })),
     shell: new THREE.MeshLambertMaterial({ color: 0x8d7aa8, side: THREE.DoubleSide }),
     shellIn: new THREE.MeshLambertMaterial({ color: 0xf6dce8, side: THREE.DoubleSide }),
+    heart: new THREE.MeshLambertMaterial({ color: COL.blush, emissive: 0x80203a, emissiveIntensity: .4 }),
+    heartBubble: new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: .3, depthWrite: false }),
     jelly: new THREE.MeshLambertMaterial({ color: 0xff8fc0, transparent: true, opacity: .8, emissive: 0x7a2050, emissiveIntensity: .3 }),
     tentacle: new THREE.MeshLambertMaterial({ color: 0xffb3d4, transparent: true, opacity: .75 }),
     bubble: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5 }),
@@ -46,8 +52,12 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
     stripe: new THREE.MeshLambertMaterial({ color: COL.pearl }),
   };
   const rayTex = tex(32, 256, (c, w, h) => {
-    const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,.28)'); g.addColorStop(.5, 'rgba(255,255,255,.1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    // Fades toward the bottom and toward both sides, so the rays have no hard edges.
+    for (let x = 0; x < w; x++) {
+      const k = Math.sin(Math.PI * (x + .5) / w);
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, `rgba(255,255,255,${.3 * k})`); g.addColorStop(.5, `rgba(255,255,255,${.1 * k})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g; c.fillRect(x, 0, 1, h);
+    }
   });
   const rayMat = new THREE.MeshBasicMaterial({ map: rayTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
 
@@ -117,6 +127,18 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
     world.add(g);
     items.push({ kind: 'oyster', m: g, hinge, gem, x, y: .35, z, ph: rand(0, 6), got: false, pop: 0 });
   }
+  const heartShape = new THREE.Shape();
+  heartShape.moveTo(0, -.18); heartShape.bezierCurveTo(-.05, -.1, -.24, 0, -.2, .1); heartShape.bezierCurveTo(-.16, .22, -.02, .2, 0, .1);
+  heartShape.bezierCurveTo(.02, .2, .16, .22, .2, .1); heartShape.bezierCurveTo(.24, 0, .05, -.1, 0, -.18);
+  const heartGeo = new THREE.ExtrudeGeometry(heartShape, { depth: .08, bevelEnabled: true, bevelSize: .02, bevelThickness: .02, bevelSegments: 2 }).center();
+  function addHeart(x, y, z) {
+    // A pink heart inside a bubble: +1 heart, only offered when she has lost one.
+    const g = new THREE.Group(); g.position.set(x, y, z);
+    g.add(new THREE.Mesh(heartGeo, D.heart));
+    g.add(mesh(G.sphere, D.heartBubble, .32));
+    world.add(g);
+    items.push({ kind: 'heart', m: g, x, y, z });
+  }
   function addJelly(x, y, z) {
     const g = new THREE.Group(); g.position.set(x, y, z);
     const dome = new THREE.Mesh(new THREE.SphereGeometry(.42, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), D.jelly); dome.scale.y = .85; g.add(dome);
@@ -130,7 +152,8 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
       const m = mesh(G.cyl, D.tentacle, .025, .55, .025); m.position.y = -.28; t.add(m); g.add(t); tents.push(t);
     }
     world.add(g);
-    items.push({ kind: 'jelly', m: g, tents, x, y, y0: y, z, ph: rand(0, 6), fly: 0 });
+    const vx = st.level >= 4 && Math.random() < Math.min(.7, (st.level - 3) * .15) ? (Math.random() < .5 ? -1 : 1) * rand(.6, 1.1) : 0;
+    items.push({ kind: 'jelly', m: g, tents, x, y, y0: y, z, ph: rand(0, 6), fly: 0, vx });
   }
   function addFish(z, talk) {
     const g = new THREE.Group(), mat = D.fish[Math.floor(Math.random() * D.fish.length)];
@@ -159,13 +182,16 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
       const cx = THREE.MathUtils.clamp(px, X_MIN + .9, X_MAX - .9), cy = THREE.MathUtils.clamp(py, Y_MIN + .9, Y_MAX - .9);
       for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; addPearl(cx + Math.cos(a) * .85, cy + Math.sin(a) * .85, z); }
     }
+    const lv = st.level;
     if (Math.random() < .4) addOyster(rand(X_MIN + .3, X_MAX - .3), z - 5);
-    if (Math.random() < .45 + Math.min(.2, st.time * .002)) addJelly(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(3, 8));
+    if (Math.random() < Math.min(.95, .35 + lv * .07)) addJelly(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(3, 8));
+    if (lv >= 3 && Math.random() < Math.min(.6, (lv - 2) * .1)) addJelly(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(5, 9));
+    if (S.hearts < 3 && Math.random() < .15) addHeart(rand(X_MIN + .3, X_MAX - .3), rand(Y_MIN + .3, Y_MAX - .3), z - rand(2, 6));
     if (Math.random() < .3) addFish(z - rand(4, 10), Math.random() < .5);
   }
 
   /* ---------- state and input ---------- */
-  const st = { x: 0, y: HOME_Y, z: 0, vx: 0, vy: 0, speed: 0, ph: 0, ms: 0, nextSpawn: 0, wave: 0, turn: 0, waveT: 0, time: 0, tx: null, ty: null, bubbleT: 0 };
+  const st = { level: 1, x: 0, y: HOME_Y, z: 0, vx: 0, vy: 0, speed: 0, ph: 0, ms: 0, nextSpawn: 0, wave: 0, turn: 0, waveT: 0, time: 0, tx: null, ty: null, bubbleT: 0 };
   const keys = {};
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), hit = new THREE.Vector3();
   const tmpV = new THREE.Vector3();
@@ -194,9 +220,10 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
     exit() { world.visible = false; clearItems(); setMermaid(P, false); P.root.rotation.set(0, 0, 0); },
     start() {
       clearItems();
-      Object.assign(st, { x: 0, y: HOME_Y, vx: 0, vy: 0, speed: 4, ms: 0, nextSpawn: st.z - 14, wave: 0, turn: 0, waveT: 0, time: 0, tx: null, ty: null });
+      Object.assign(st, { x: 0, y: HOME_Y, vx: 0, vy: 0, speed: 4, ms: 0, nextSpawn: st.z - 14, wave: 0, turn: 0, waveT: 0, time: 0, tx: null, ty: null, level: 1 });
+      sfx.splash();
     },
-    scoreText() { return `${S.pearls} pearls`; },
+    scoreText() { return `${S.pearls} pearls · Level ${st.level}`; },
     finish(bank) {
       return {
         eyebrow: 'Dive complete',
@@ -206,8 +233,12 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
     },
     update(dt) {
       const playing = S.mode === 'play';
-      if (playing) st.time += dt;
-      st.speed = playing ? damp(st.speed, 4 + Math.min(3, st.time * .03), 1.5, dt) : damp(st.speed, 0, 3, dt);
+      if (playing) {
+        st.time += dt;
+        const lv = Math.min(MAX_LEVEL, 1 + Math.floor(st.time / LEVEL_EVERY));
+        if (lv > st.level) { st.level = lv; levelUp(lv); hud(); }
+      }
+      st.speed = playing ? damp(st.speed, Math.min(MAX_SPEED, 4 + (st.level - 1) * .65), 1.5, dt) : damp(st.speed, 0, 3, dt);
       st.z -= st.speed * dt;
 
       // Steering: glide toward the touch point, or move with the arrow keys.
@@ -235,14 +266,14 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
       if (playing) {
         const next = MILESTONES[st.ms];
         if (next && S.pearls >= next.m) {
-          st.ms++; banner(next.t); sfx.yay(); confetti.burst(tmpV.set(st.x, st.y + .8, st.z - 1), 60, 2);
+          st.ms++; banner(next.t); sfx.milestone(); confetti.burst(tmpV.set(st.x, st.y + .8, st.z - 1), 60, 2);
           st.waveT = 1.8;
           // Shoo the jellyfish ahead away while she turns to wave.
           for (const it of items) if (it.kind === 'jelly' && !it.fly && it.z < st.z && it.z > st.z - st.speed * 3) it.fly = 1;
         }
-        while (st.nextSpawn > st.z - 45) { spawn(st.nextSpawn); st.nextSpawn -= rand(7, 11); }
+        while (st.nextSpawn > st.z - 45) { spawn(st.nextSpawn); st.nextSpawn -= Math.max(4.5, rand(7, 11) - st.level * .4); }
         st.bubbleT -= dt;
-        if (st.bubbleT <= 0) { st.bubbleT = rand(.2, .5); const b = bubbles[Math.floor(Math.random() * bubbles.length)]; resetBubble(b, true); }
+        if (st.bubbleT <= 0) { st.bubbleT = rand(.2, .5); const b = bubbles[Math.floor(Math.random() * bubbles.length)]; resetBubble(b, true); if (Math.random() < .12) sfx.bubble(); }
       }
 
       const cx = st.x, cy = st.y + .15;
@@ -255,7 +286,7 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
             removeItem(i); S.pearls++; sfx.pearl(); confetti.burst(tmpV.set(it.x, it.y, it.z), 4, 2); hud();
           }
         } else if (it.kind === 'oyster') {
-          const open = it.got ? 1 : THREE.MathUtils.clamp(Math.sin(S.t * 1.8 + it.ph) * 1.6 + .6, 0, 1);
+          const open = it.got ? 1 : THREE.MathUtils.clamp(Math.sin(S.t * 1.8 + it.ph) * 1.6 + Math.max(-.2, .6 - st.level * .07), 0, 1);
           it.hinge.rotation.x = -open * 1.05;
           if (it.got) {
             it.pop += dt; it.gem.position.y = .3 + it.pop * 2.5; it.gem.scale.setScalar(.2 * Math.max(0, 1 - it.pop));
@@ -264,6 +295,12 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
             it.got = true; S.pearls += 3; sfx.oyster(); hud();
             confetti.burst(tmpV.set(it.x, .6, it.z), 14, 2);
             it.bubble = textSprite('+3', { color: '#ff6b4a' }); it.bubble.position.set(it.x, 1, it.z); world.add(it.bubble);
+          }
+        } else if (it.kind === 'heart') {
+          it.m.rotation.y += dt * 2; it.m.position.y = it.y + Math.sin(S.t * 2 + it.z) * .1;
+          if (playing && Math.abs(it.z - st.z) < .6 && Math.hypot(it.x - cx, it.m.position.y - cy) < .6) {
+            removeItem(i); S.hearts = Math.min(3, S.hearts + 1); sfx.heart(); banner('A heart from the sea! +1'); hud();
+            confetti.burst(tmpV.set(it.x, it.y, it.z), 16, 2);
           }
         } else if (it.kind === 'jelly') {
           it.tents.forEach((t, k) => { t.rotation.x = Math.sin(S.t * 3 + k + it.ph) * .3; t.rotation.z = Math.cos(S.t * 2.6 + k) * .25; });
@@ -274,16 +311,17 @@ export function createHunt({ scene, P, confetti, S, hurt, banner, hud, camera })
             continue;
           }
           it.m.position.y = it.y0 + Math.sin(S.t * 1.5 + it.ph) * .5;
+          if (it.vx && !it.fly) { it.m.position.x += it.vx * dt; if (it.m.position.x < X_MIN || it.m.position.x > X_MAX) it.vx = -it.vx; }
           it.m.scale.y = 1 + Math.sin(S.t * 3 + it.ph) * .08;
           if (playing && S.inv <= 0 && Math.abs(it.z - st.z) < .55 && Math.hypot(it.m.position.x - cx, it.m.position.y - .1 - cy) < .62) {
-            it.fly = 1; hurt(S.hearts === 2 ? 'Careful, Pearl! One heart left' : 'Boop! Silly jellyfish');
+            it.fly = 1; hurt(S.hearts === 2 ? 'Careful, Pearl! One heart left' : 'Boop! Silly jellyfish', sfx.jelly);
           }
         } else if (it.kind === 'fish') {
           it.m.position.x += it.dir * it.v * dt;
           it.m.position.y = it.y + Math.sin(S.t * 2 + it.ph) * .15;
           it.tail.rotation.y = Math.sin(S.t * 10 + it.ph) * .5;
           if (it.talk && !it.said && it.z - st.z > -9 && it.z < st.z && Math.abs(it.m.position.x) < 4) {
-            it.said = true; sfx.bubble();
+            it.said = true; sfx.fish();
             it.bubble = textSprite(GREETINGS[Math.floor(Math.random() * GREETINGS.length)]); it.bubble.scale.multiplyScalar(1.4); world.add(it.bubble); it.sayT = 2.5;
           }
           if (it.bubble) { it.bubble.position.set(it.m.position.x, it.m.position.y + .55, it.z); it.sayT -= dt; if (it.sayT <= 0) { world.remove(it.bubble); it.bubble = null; } }
