@@ -55,7 +55,8 @@ p{margin:0}
 .house .fill{display:block;height:100%;width:100%;background:linear-gradient(90deg,#7fe38a,#ffc93c);transition:width .2s}
 .house.close .track{animation:throb .5s ease-in-out infinite alternate}
 .house.close .fill{background:var(--blush)}
-#crosshair{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid var(--pearl);border-radius:50%;box-shadow:0 0 0 2px rgba(36,22,61,.6);pointer-events:none}
+#crosshair{position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:3px solid var(--pearl);border-radius:50%;box-shadow:0 0 0 2px rgba(36,22,61,.6);pointer-events:none;transition:width .12s,height .12s,margin .12s,border-color .12s}
+#crosshair.lock{width:40px;height:40px;margin:-20px 0 0 -20px;border-color:var(--coral);box-shadow:0 0 0 2px rgba(36,22,61,.6),inset 0 0 0 2px rgba(36,22,61,.4)}
 .seeds{position:absolute;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;justify-content:center}
 .seeds button{flex:0 1 58px;height:62px;border-radius:14px;border:3px solid var(--ink);background:var(--pearl);box-shadow:0 3px 0 var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;cursor:pointer}
 .seeds button span{font-size:24px;line-height:1}
