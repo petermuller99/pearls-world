@@ -54,6 +54,8 @@ p{margin:0}
 .bank{font-size:14px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
 .bank b{color:var(--ink)}
 .install{align-self:flex-start}
+.diff{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.diff span{flex-basis:100%;font:800 12px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--lagoon)}
 #hud{position:absolute;top:max(10px,env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
 .stats{display:flex;flex-direction:column;gap:4px;font:400 22px/1 var(--display);color:var(--pearl);text-shadow:2px 2px 0 var(--ink);font-variant-numeric:tabular-nums}
 .chase{width:min(34vw,150px);padding-top:4px;padding-right:14px}
@@ -140,6 +142,12 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
           <span class="mt">Pearl Hunt</span>
           <span class="md">Swim the lagoon as a little mermaid. Touch where to swim.</span>
         </button>
+      </div>
+      <div class="diff" id="difficulty" role="group" aria-label="Difficulty">
+        <span>Difficulty</span>
+        <button class="chip" data-d="easy" aria-pressed="false">🍼 Easy</button>
+        <button class="chip" data-d="normal" aria-pressed="true">🙂 Normal</button>
+        <button class="chip" data-d="hard" aria-pressed="false">🔥 Hard</button>
       </div>
       <p class="bank">Piggy bank: <b id="bank">0</b> pearls · Longest walk: <b id="best">0</b> m</p>
       <button class="btn go install" id="installBtn" hidden>Put Pearl's World on this phone</button>

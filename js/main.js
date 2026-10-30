@@ -2,7 +2,7 @@
 // banner, pause, end card, piggy bank) and the render loop. Each game lives in its own module.
 import { THREE, $, store, damp, makePearl, applyPhoto, applyLook, makeConfetti, LOOKS, DEFAULT_LOOK } from './common.js';
 import { audio, sfx, unlock, setSfx, setMusic, playMusic, stopMusic, setMusicLevel, pauseAudio, resumeAudio } from './audio.js';
-import { createPowers, GAP_MAX, GAP_START } from './chase.js';
+import { createPowers, GAP_MAX, GAP_START, DIFFICULTY } from './chase.js';
 import { createRunner } from './runner.js';
 import { createHunt } from './hunt.js';
 
@@ -32,7 +32,8 @@ function resize() {
 addEventListener('resize', resize);
 
 /* ---------- shared game state ---------- */
-const S = { mode: 'menu', t: 0, pearls: 0, inv: 0, cam: 0, paused: false, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false };
+let diffKey = DIFFICULTY[store.get('pw_difficulty', 'normal')] ? store.get('pw_difficulty', 'normal') : 'normal';
+const S = { diff: DIFFICULTY[diffKey], mode: 'menu', t: 0, pearls: 0, inv: 0, cam: 0, paused: false, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false };
 let bank = store.get('pw_bank', 0);
 const P = makePearl();
 scene.add(P.root);
@@ -58,7 +59,7 @@ function hud() {
 // A bump trips Pearl up and lets Mummy gain ground. The shield bubble blocks one bump.
 function hurt(msg, sound = sfx.hit, amount = 2) {
   if (S.shieldT > 0) { S.shieldT = 0; S.inv = .8; sfx.shieldPop(); banner('Your shield saved you!'); hud(); return; }
-  S.gap -= amount; S.inv = 1.2; S.stumble = .6; sound(); sfx.oops(); hud();
+  S.gap -= amount * S.diff.hit; S.inv = 1.2; S.stumble = .6; sound(); sfx.oops(); hud();
   if (S.gap <= 0) caught(); else banner(msg);
 }
 let sayTimer = 0;
@@ -114,7 +115,7 @@ function endGame() {
   bank += S.pearls; store.set('pw_bank', bank);
   stopMusic(); (S.caught ? sfx.caught : sfx.gameOver)(); hud();
   const info = game.finish(bank);
-  $('overEyebrow').textContent = info.eyebrow; $('overTitle').textContent = info.title; $('overText').textContent = info.text;
+  $('overEyebrow').textContent = `${info.eyebrow} · ${S.diff.label}`; $('overTitle').textContent = info.title; $('overText').textContent = info.text;
   setTimeout(() => { if (S.mode === 'over') { $('hud').hidden = true; $('over').hidden = false; } }, 900);
 }
 
@@ -124,6 +125,15 @@ $('playDive').onclick = () => start('dive');
 $('againBtn').onclick = () => start(game.id);
 $('menuBtn').onclick = toMenu;
 $('homeBtn').onclick = () => { if (S.mode === 'play') { endGame(); } toMenu(); };
+
+/* ---------- difficulty ---------- */
+function showDifficulty() {
+  for (const b of document.querySelectorAll('#difficulty button')) b.setAttribute('aria-pressed', String(b.dataset.d === diffKey));
+}
+for (const b of document.querySelectorAll('#difficulty button')) {
+  b.onclick = () => { unlock(); sfx.click(); diffKey = b.dataset.d; S.diff = DIFFICULTY[diffKey]; store.set('pw_difficulty', diffKey); showDifficulty(); };
+}
+showDifficulty();
 
 /* ---------- pause ---------- */
 function setPaused(on) {
@@ -240,7 +250,7 @@ function update(dt) {
   if (S.mode === 'play') {
     // Pearl slowly pulls away again while she runs cleanly. Mummy gets quicker at higher levels.
     const lv = game.st.level || 1;
-    S.gap = Math.min(GAP_MAX, S.gap + dt * Math.max(.04, .16 - lv * .01));
+    S.gap = Math.min(GAP_MAX, S.gap + dt * Math.max(.04, .16 - lv * .01) * S.diff.regen);
     if (S.stumble > 0) S.stumble -= dt;
     S.hudT = (S.hudT || 0) - dt; if (S.hudT <= 0) { S.hudT = .2; hud(); }
   }
