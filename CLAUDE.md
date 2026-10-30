@@ -18,6 +18,16 @@ Shared features:
 - Installable on phones (PWA): `manifest.webmanifest`, `sw.js` (offline cache), `icons/` (cartoon Pearl head on a sunset). Menu shows a "Put Pearl's World on this phone" button when Chrome offers install. When adding new files the game needs offline, list them in `sw.js` and bump its `VERSION`.
 - Logical coordinate system: `S = min(h/400, w/460)`, world is `VW x VH` logical units. Ground at `VH - 60`.
 
+## 3D prototype (`3d/`)
+
+`3d/index.html` + `3d/game.js`: First Steps in 3D with Three.js (r170, vendored at `3d/vendor/three.module.min.js` so it works offline; no build step). Linked from the main menu as "New: try First Steps in 3D".
+- Pearl and the world are built from simple shapes and canvas textures (no model files): toy-style Pearl with puff buns, bow and ankara dress, crawl/toddle/run poses animated in code. Uses the saved photo (`pw_face`) on her face, and shares `pw_bank`, `pw_best`, `pw_mute` with the 2D game.
+- Lekki-Ikoyi Link Bridge: sandy walkway with 3 lanes for Pearl, roads either side with danfos and keke, cable-stayed pylons with waving Nigerian flags, lagoon, palms, skyline, sunset.
+- Controls: swipe left/right to change lanes, tap or swipe up to jump (double jump), arrow keys and space on desktop.
+- Camera sits in front of Pearl on the menu and end card (so her face shows) and behind her while playing. At each milestone she turns round and waves while the path ahead is cleared.
+- Drops pixel ratio automatically if the phone struggles. `?debug` exposes `window.__pw` so tests can fast-forward.
+- Headless tests render 3D in software at about 5 fps, so check real smoothness on a phone.
+
 ## Design direction
 
 - Palette: ink `#24163d`, pearl `#fff8f0`, coral `#ff6b4a`, lagoon `#0f8a8f`, sun `#ffc93c`, blush `#ff5c8a`.

@@ -45,7 +45,7 @@ h2{font-size:clamp(34px,9vw,48px)}
 .btn{font:800 15px/1 var(--body);border:3px solid var(--ink);border-radius:999px;padding:10px 16px;background:var(--sun);color:var(--ink);cursor:pointer}
 .btn:active{transform:translateY(2px)}
 .install{background:var(--coral);color:var(--pearl);align-self:flex-start}
-.link{font:700 13px var(--body);background:none;border:0;padding:0;color:var(--lagoon);text-decoration:underline;cursor:pointer}
+.link{align-self:flex-start;font:800 15px var(--body);background:none;border:0;padding:0;color:var(--lagoon);text-decoration:underline;cursor:pointer}
 .modes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:420px){.modes{grid-template-columns:1fr}}
 .mode{display:flex;flex-direction:column;gap:6px;text-align:left;border:3px solid var(--ink);border-radius:20px;padding:14px;color:var(--pearl);cursor:pointer;box-shadow:0 5px 0 var(--ink);font-family:var(--body);transition:transform .12s}
@@ -100,6 +100,7 @@ button:focus-visible,.btn:focus-within,label:focus-visible{outline:3px solid var
         </button>
       </div>
       <p class="bank">Piggy bank: <b id="bank">0</b> pearls · Longest walk: <b id="best">0</b> m</p>
+      <a class="link" href="3d/">New: try First Steps in 3D</a>
       <button class="btn install" id="installBtn" hidden>Put Pearl's World on this phone</button>
     </div>
   </section>
