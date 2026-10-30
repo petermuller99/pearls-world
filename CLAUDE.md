@@ -15,6 +15,7 @@ Shared features:
 - Photo upload: center-cropped to 200x200 JPEG, stored in localStorage (`pw_face`), drawn as a circular head with a pink bow. Falls back to a drawn cartoon Pearl (brown skin, puff hair, bow).
 - Piggy bank: total pearls across all games (`pw_bank`), best walk distance (`pw_best`), mute (`pw_mute`).
 - WebAudio beeps for sound effects.
+- Installable on phones (PWA): `manifest.webmanifest`, `sw.js` (offline cache), `icons/` (cartoon Pearl head on a sunset). Menu shows a "Put Pearl's World on this phone" button when Chrome offers install. When adding new files the game needs offline, list them in `sw.js` and bump its `VERSION`.
 - Logical coordinate system: `S = min(h/400, w/460)`, world is `VW x VH` logical units. Ground at `VH - 60`.
 
 ## Design direction
@@ -32,8 +33,12 @@ Shared features:
 3. Record real sounds: my voice saying "Go Pearl!", her laughs, as pickup and milestone sounds.
 4. Milestone editor: so I can add her real milestones with dates as they happen (a living baby book).
 5. More levels: grandma's house, the market, Lekki Conservation Centre canopy walk, Christmas level.
-6. Make it installable on Android (PWA, works offline).
+6. ~~Make it installable on Android (PWA, works offline).~~ Done.
 7. Later: connect the piggy bank to the Pearl wallet project (her crypto wallet app) so pearls teach saving.
+
+## Hosting
+
+Live at https://petermuller99.github.io/pearls-world/ (GitHub Pages, deploys from `main`). Claude works on its own branch; changes go live only when merged into `main`. All paths must stay relative because the site lives under `/pearls-world/`.
 
 ## Working rules
 
