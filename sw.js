@@ -2,7 +2,7 @@
 // Game files: serve from cache straight away, refresh the cache in the background,
 // so the game opens instantly offline and picks up updates on the next launch.
 // Bump VERSION when the list of files below changes.
-const VERSION = 'pw-v1';
+const VERSION = 'pw-v2';
 const SHELL = [
   './',
   'index.html',
@@ -35,9 +35,10 @@ self.addEventListener('fetch', e => {
 
   e.respondWith(
     caches.open(VERSION).then(async cache => {
-      // Opening the game from the home screen asks for "./"; treat it as index.html.
-      const key = req.mode === 'navigate' ? './' : req;
-      const cached = await cache.match(key, { ignoreSearch: req.mode === 'navigate' });
+      // Pages are cached by their path alone, so "./?source=pwa" and "./" share one entry.
+      const nav = req.mode === 'navigate';
+      const key = nav ? url.origin + url.pathname : req;
+      const cached = await cache.match(key, { ignoreSearch: nav });
       const fresh = fetch(req)
         .then(res => {
           if (res.ok || res.type === 'opaque') cache.put(key, res.clone());
