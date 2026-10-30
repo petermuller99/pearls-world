@@ -38,7 +38,7 @@ Shared features:
 
 ## Hosting
 
-Live at https://petermuller99.github.io/pearls-world/ (GitHub Pages, deploys from `main`). Claude works on its own branch; changes go live only when merged into `main`. All paths must stay relative because the site lives under `/pearls-world/`.
+Live at https://petermuller99.github.io/pearls-world/ (GitHub Pages, deploys from `main`). Claude works on its own branch, opens a pull request into `main`, and merges it itself once the change is tested and playable (Oluwashina's standing permission). Merging is what makes a change live. All paths must stay relative because the site lives under `/pearls-world/`.
 
 ## Working rules
 
