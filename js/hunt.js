@@ -246,13 +246,13 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
     }
     const lv = st.level;
     if (Math.random() < .4) addOyster(rand(X_MIN + .3, X_MAX - .3), z - 5);
-    if (Math.random() < Math.min(.95, .35 + lv * .07)) addJelly(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(3, 8));
-    if (lv >= 3 && Math.random() < Math.min(.6, (lv - 2) * .1)) addJelly(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(5, 9));
+    if (Math.random() < Math.min(.95, (.35 + lv * .07) * S.diff.attack)) addJelly(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(3, 8));
+    if (lv >= 3 && Math.random() < Math.min(.6, (lv - 2) * .1) * S.diff.attack) addJelly(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(5, 9));
     if (S.gap < 7 && Math.random() < .15) addHeart(rand(X_MIN + .3, X_MAX - .3), rand(Y_MIN + .3, Y_MAX - .3), z - rand(2, 6));
     if (Math.random() < .3) addFish(z - rand(4, 10), Math.random() < .5);
     // Attackers: pufferfish from the start, octopuses from level 2, more as levels rise.
-    if (Math.random() < Math.min(.45, .14 + lv * .03)) addPuffer(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(8, 12));
-    if (lv >= 2 && Math.random() < Math.min(.3, (lv - 1) * .06)) addOcto(rand(X_MIN + .4, X_MAX - .4), rand(Y_MIN + .6, Y_MAX - .4), z - rand(10, 14));
+    if (Math.random() < Math.min(.45, .14 + lv * .03) * S.diff.attack) addPuffer(rand(X_MIN, X_MAX), rand(Y_MIN + .3, Y_MAX - .3), z - rand(8, 12));
+    if (lv >= 2 && Math.random() < Math.min(.3, (lv - 1) * .06) * S.diff.attack) addOcto(rand(X_MIN + .4, X_MAX - .4), rand(Y_MIN + .6, Y_MAX - .4), z - rand(10, 14));
     // Power-ups. An early one is always fireballs so Pearl learns to throw them.
     st.rows++;
     const pw = st.rows === 3 ? 'fire' : Math.random() < .12 ? POWERS[Math.floor(Math.random() * POWERS.length)] : null;
@@ -325,10 +325,10 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
       const playing = S.mode === 'play';
       if (playing) {
         st.time += dt;
-        const lv = Math.min(MAX_LEVEL, 1 + Math.floor(st.time / LEVEL_EVERY));
+        const lv = Math.min(MAX_LEVEL, 1 + Math.floor(st.time / (LEVEL_EVERY * S.diff.level)));
         if (lv > st.level) { st.level = lv; levelUp(lv); hud(); }
       }
-      st.speed = playing ? damp(st.speed, Math.min(MAX_SPEED, 4 + (st.level - 1) * .65) * (S.stumble > 0 ? .35 : 1), S.stumble > 0 ? 6 : 1.5, dt) : damp(st.speed, 0, 3, dt);
+      st.speed = playing ? damp(st.speed, Math.min(MAX_SPEED * S.diff.max, (4 + (st.level - 1) * .65) * S.diff.speed) * (S.stumble > 0 ? .35 : 1), S.stumble > 0 ? 6 : 1.5, dt) : damp(st.speed, 0, 3, dt);
       st.z -= st.speed * dt;
 
       // Steering: glide toward the touch point, or move with the arrow keys.

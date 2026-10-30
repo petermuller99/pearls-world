@@ -277,8 +277,8 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     const free = 3 - obstLane - pl;
     if (S.gap < 7 && Math.random() < .12) addItem('bottle', free, z - 3);
     // Attackers: goats from the start, crows from level 2, more of both as levels rise.
-    if (Math.random() < Math.min(.4, .1 + lv * .03)) { const g = addItem('goat', Math.random() < .5 ? obstLane : free, z - 16); g.vz = rand(3.5, 5) + lv * .25; }
-    if (lv >= 2 && Math.random() < Math.min(.3, (lv - 1) * .05)) addItem('crow', pl, z - 12).vz = rand(2, 3);
+    if (Math.random() < Math.min(.4, .1 + lv * .03) * S.diff.attack) { const g = addItem('goat', Math.random() < .5 ? obstLane : free, z - 16); g.vz = rand(3.5, 5) + lv * .25; }
+    if (lv >= 2 && Math.random() < Math.min(.3, (lv - 1) * .05) * S.diff.attack) addItem('crow', pl, z - 12).vz = rand(2, 3);
     // Power-ups. The first few rows always offer fireballs so Pearl learns to throw them.
     st.rows++;
     if (st.rows === 4) addItem('fire', pl, z - 7);
@@ -339,12 +339,13 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     update(dt) {
       const playing = S.mode === 'play';
       // A bump trips her up for a moment, which lets Mummy catch up.
-      st.speed = playing ? damp(st.speed, Math.min(MAX_SPEED, STAGE_SPEED[st.stage] + st.dist * .0035) * (S.stumble > 0 ? .35 : 1), S.stumble > 0 ? 6 : 1.5, dt) : damp(st.speed, 0, 3, dt);
+      const D = S.diff;
+      st.speed = playing ? damp(st.speed, Math.min(MAX_SPEED * D.max, (STAGE_SPEED[st.stage] + st.dist * .0035) * D.speed) * (S.stumble > 0 ? .35 : 1), S.stumble > 0 ? 6 : 1.5, dt) : damp(st.speed, 0, 3, dt);
       st.z -= st.speed * dt;
       if (playing) {
         st.dist = st.startZ - st.z;
         if (Math.floor(st.dist) !== st.shownDist) { st.shownDist = Math.floor(st.dist); hud(); }
-        const lv = Math.min(MAX_LEVEL, 1 + Math.floor(st.dist / LEVEL_EVERY));
+        const lv = Math.min(MAX_LEVEL, 1 + Math.floor(st.dist / (LEVEL_EVERY * S.diff.level)));
         if (lv > st.level) { st.level = lv; levelUp(lv); hud(); }
       }
 

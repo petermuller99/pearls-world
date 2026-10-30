@@ -5,6 +5,15 @@ import { sfx } from './audio.js';
 // The chase gap: how far ahead of Mummy Pearl is. 0 means caught.
 export const GAP_MAX = 10, GAP_START = 6;
 
+// Difficulty settings, chosen on the menu. Multipliers on the Normal game:
+// speed, top speed, distance/time per level (lower = levels come sooner),
+// attacker chances, ground lost per bump, and how fast Pearl pulls away from Mummy.
+export const DIFFICULTY = {
+  easy: { label: 'Easy', speed: .8, max: .8, level: 1.5, attack: .45, hit: .7, regen: 1.5 },
+  normal: { label: 'Normal', speed: 1, max: 1, level: 1, attack: 1, hit: 1, regen: 1 },
+  hard: { label: 'Hard', speed: 1.4, max: 1.45, level: .65, attack: 1.7, hit: 1.25, regen: .7 },
+};
+
 /* ---------- Mummy ---------- */
 const mumDress = new THREE.MeshLambertMaterial({ map: getOutfit('purple') });
 const mumGele = new THREE.MeshLambertMaterial({ map: getOutfit('sun') });
