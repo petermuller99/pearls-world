@@ -1,5 +1,5 @@
 // First Steps: Pearl crawls, toddles and runs toward -z along the Lekki-Ikoyi Link Bridge.
-import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, store, COL } from './common.js';
+import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, store, COL, outlined } from './common.js';
 import { sfx } from './audio.js';
 import { makeMum, makePowerItem, animatePowerItem, POWERS } from './chase.js';
 import { createDaddy } from './daddy.js';
@@ -86,6 +86,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     beak: new THREE.MeshLambertMaterial({ color: 0xffb020 }),
   };
 
+  outlined(R.goat, R.goatPatch, R.horn, R.crow, R.beak);
   /* ---------- lights ---------- */
   world.add(new THREE.HemisphereLight(0xffe2c4, 0x2c6f7a, 1.6));
   const key = new THREE.DirectionalLight(0xfff0dc, 1.7);
@@ -99,7 +100,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
   const segments = [];
   for (let i = 0; i < 9; i++) {
     const g = new THREE.Group();
-    const d = new THREE.Mesh(deckGeo, deckMats); d.position.y = -.25; g.add(d);
+    const d = new THREE.Mesh(deckGeo, deckMats); d.position.y = -.25; d.receiveShadow = true; d.userData.noShadow = true; g.add(d);
     for (const s of [-1, 1]) {
       const bar = mesh(G.box, R.barrier, .25, .35, SEG); bar.position.set(s * 2.75, .17, 0); g.add(bar);
       const rail = mesh(G.box, R.rail, .12, .1, SEG); rail.position.set(s * 6.4, .9, 0); g.add(rail);
@@ -128,9 +129,22 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
   }
   const pylons = [0, 1].map(i => { const p = makePylon(); p.position.z = -60 - i * PYLON_GAP; return p; });
 
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshLambertMaterial({ color: 0x1a9a9a }));
+  // Rippling lagoon: a scrolling wave normal map catches the low sun as glints.
+  const waveTex = tex(128, 128, (c, w, h) => {
+    const img = c.createImageData(w, h), T = Math.PI * 2;
+    const H = (x, y) => Math.sin(x * T * 3 / w + Math.sin(y * T / h) * 1.5) * .5 + Math.sin((x + y) * T * 5 / w) * .3 + Math.sin(y * T * 4 / h + Math.sin(x * T * 2 / w)) * .4;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const dx = (H(x + 1, y) - H(x - 1, y)) * 2.5, dy = (H(x, y + 1) - H(x, y - 1)) * 2.5, l = Math.hypot(dx, dy, 1), i = (y * w + x) * 4;
+      img.data[i] = (-dx / l * .5 + .5) * 255; img.data[i + 1] = (-dy / l * .5 + .5) * 255; img.data[i + 2] = (1 / l * .5 + .5) * 255; img.data[i + 3] = 255;
+    }
+    c.putImageData(img, 0, 0);
+  }, true);
+  waveTex.colorSpace = THREE.NoColorSpace; waveTex.repeat.set(60, 60);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshPhongMaterial({ color: 0x178f94, specular: 0xffd9a0, shininess: 70, normalMap: waveTex, normalScale: new THREE.Vector2(.7, .7) }));
+  water.userData.noShadow = true;
   water.rotation.x = -Math.PI / 2; water.position.y = -2.2; world.add(water);
-  const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(26, 40), new THREE.MeshBasicMaterial({ color: 0xfff1c9, fog: false }));
+  // Brighter than white so the sun glows on High graphics.
+  const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(26, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.9, 1.7, 1.25), fog: false }));
   world.add(sunDisc);
 
   const BCOLS = [0xf0a48a, 0xe58f7e, 0xf6c3a0, 0xd98a8a, 0xf2b5a0, 0xc9a0b8];
@@ -151,6 +165,62 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     for (let k = 0; k < 7; k++) { const l = new THREE.Mesh(leafGeo, R.palmLeaf); l.position.set(.35, 4, 0); l.rotation.set(0, k / 7 * Math.PI * 2, -.45); g.add(l); }
     world.add(g); return g;
   }
+  /* ---------- sky and lagoon life ---------- */
+  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xfff3ea, emissive: 0xffb48a, emissiveIntensity: .35, fog: false });
+  const clouds = [];
+  for (let i = 0; i < 9; i++) {
+    const g = new THREE.Group();
+    for (let k = 0, n = 4 + (i % 3); k < n; k++) { const m = mesh(G.lowSphere, cloudMat, rand(4, 8), rand(2, 3.5), rand(3, 5)); m.position.set(k * 5 - n * 2.5, rand(-1, 1.5), rand(-2, 2)); m.userData.noShadow = true; g.add(m); }
+    g.position.set(rand(-130, 130), rand(30, 55), -rand(120, 330)); world.add(g); clouds.push(g);
+  }
+  const birdMat = new THREE.MeshBasicMaterial({ color: 0x5a3a4a });
+  const birds = [];
+  for (let i = 0; i < 8; i++) {
+    const g = new THREE.Group();
+    const wings = [-1, 1].map(sx => { const p = new THREE.Group(); const w = mesh(G.box, birdMat, .9, .06, .25); w.position.x = sx * .45; p.add(w); g.add(p); return p; });
+    g.userData.wings = wings; g.userData.v = rand(2, 4) * (Math.random() < .5 ? -1 : 1); g.userData.ph = rand(0, 6);
+    g.position.set(rand(-60, 60), rand(14, 26), -rand(30, 140)); world.add(g); birds.push(g);
+  }
+  // Canoes with bright sails and a yellow ferry out on the lagoon.
+  const hullMat = new THREE.MeshLambertMaterial({ color: 0x7a4a2c });
+  const sailMats = [0xff6b4a, 0xffc93c, 0xfff8f0, 0x0f8a8f].map(c => new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }));
+  const sailGeo = new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0, 3), new THREE.Vector2(1.8, 0)]));
+  const boats = [];
+  for (let i = 0; i < 6; i++) {
+    const g = new THREE.Group();
+    if (i === 5) {
+      const hull = mesh(G.box, R.danfoTop, 3, 1.1, 9); hull.position.y = .3; g.add(hull);
+      const cabin = mesh(G.box, R.rail, 2.4, 1.3, 5); cabin.position.y = 1.5; g.add(cabin);
+      const roof = mesh(G.box, R.tyre, 2.6, .15, 5.4); roof.position.y = 2.2; g.add(roof);
+    } else {
+      const hull = mesh(G.box, hullMat, .9, .4, 3.4); g.add(hull);
+      const mast = mesh(G.cyl, hullMat, .05, 3.2, .05); mast.position.y = 1.6; g.add(mast);
+      const sail = new THREE.Mesh(sailGeo, sailMats[i % 4]); sail.position.set(0, .3, .1); sail.rotation.y = Math.PI / 2; g.add(sail);
+    }
+    g.userData.ph = rand(0, 6); g.userData.s = i % 2 ? 1 : -1;
+    g.position.set(g.userData.s * rand(14, 45), -1.9, -rand(10, 200)); g.rotation.y = rand(-.5, .5); world.add(g); boats.push(g);
+  }
+  // Eko Atlantic: tall glass towers on the far shore.
+  const glassTex = tex(64, 128, (c, w, h) => {
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#b9dbe8'; for (let y = 0; y < h; y += 8) c.fillRect(0, y, w, 3);
+    c.fillStyle = '#e8f4f8'; for (let x = 0; x < w; x += 16) c.fillRect(x, 0, 2, h);
+  }, true);
+  const glassMat = new THREE.MeshPhongMaterial({ color: 0x9cd0e2, specular: 0xffffff, shininess: 90, map: glassTex });
+  const towers = new THREE.Group(); world.add(towers);
+  for (let i = 0; i < 8; i++) {
+    const h = rand(45, 85), w = rand(7, 12), t = mesh(G.box, glassMat, w, h, w);
+    t.position.set(-rand(95, 150), h / 2 - 2.2, -150 - i * 22 - rand(0, 10)); t.rotation.y = rand(0, 1); towers.add(t);
+  }
+  // Third Mainland Bridge: a long low bridge across the lagoon on the other side.
+  const tmb = [];
+  for (let i = 0; i < 3; i++) {
+    const g = new THREE.Group();
+    const deck = mesh(G.box, R.pylon, 7, 1.1, 120); deck.position.y = 5; g.add(deck);
+    for (let z = -55; z <= 55; z += 11) { const pier = mesh(G.box, R.barrier, 1.4, 7, 1.4); pier.position.set(0, 1.5, z); g.add(pier); }
+    g.position.set(98, 0, -60 - i * 120); world.add(g); tmb.push(g);
+  }
+
   for (let i = 0; i < 6; i++) { const p = makePalm(); const s = i % 2 ? 1 : -1; p.userData.s = s; p.position.set(s * rand(13, 22), 0, -i * 30 - 10); palms.push(p); }
 
   function makeDanfo() {
@@ -316,7 +386,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     items,
     startBanner: 'Crawl, Pearl, crawl!',
     hint: 'Swipe to change lanes. Tap to jump.',
-    world, st,
+    world, st, shadowLight: key,
     enter() {
       world.visible = true; scene.background = sky; scene.fog = fog;
       setMermaid(P, false);
@@ -364,7 +434,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
       if (st.waveT > 0) st.waveT -= dt;
       st.turn = damp(st.turn, st.waveT > 0 ? 1 : 0, 6, dt);
       st.wave = damp(st.wave, st.waveT > 0 || !playing ? 1 : 0, 6, dt);
-      posePearl(P, { ph: st.ph, stage, air, turn: st.turn, wave: st.wave, idle, t: S.t });
+      posePearl(P, { ph: st.ph, stage, air, turn: st.turn, wave: st.wave, idle, t: S.t, oops: S.stumble > 0 });
       P.root.position.set(st.x, st.y, st.z);
       P.root.rotation.set(0, 0, (LANES[st.lane] - st.x) * -.12);
       P.shadow.position.y = .015 - st.y; P.shadow.scale.setScalar(Math.max(.15, .38 - st.y * .12));
@@ -459,6 +529,21 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
         if (v.m.position.z > st.z + 40) v.m.position.z = st.z - rand(60, 150);
       }
       water.position.z = st.z - 150; sunDisc.position.set(0, 26, st.z - 330);
+      // Keep the ripples fixed to the world as the water plane follows Pearl, plus a slow drift.
+      waveTex.offset.set(S.t * .012, -water.position.z / 10 + S.t * .03);
+      for (const c of clouds) { c.position.x += dt * .8; if (c.position.x > 140) c.position.x = -140; if (c.position.z > st.z - 90) c.position.z -= 260; }
+      for (const b of birds) {
+        b.position.x += b.userData.v * dt; b.userData.wings.forEach((w, k) => { w.rotation.z = Math.sin(S.t * 8 + b.userData.ph) * .6 * (k ? -1 : 1); });
+        if (Math.abs(b.position.x) > 70) b.userData.v *= -1;
+        b.rotation.y = b.userData.v > 0 ? 0 : Math.PI;
+        if (b.position.z > st.z - 20) b.position.z -= 140;
+      }
+      for (const b of boats) {
+        b.position.y = -1.9 + Math.sin(S.t * 1.5 + b.userData.ph) * .12; b.rotation.z = Math.sin(S.t * 1.2 + b.userData.ph) * .05;
+        if (b.position.z > st.z + 20) { b.position.z -= 220; b.position.x = b.userData.s * rand(14, 45); }
+      }
+      for (const t of towers.children) if (t.position.z > st.z + 30) t.position.z -= 176 + rand(0, 20);
+      for (const g of tmb) if (g.position.z > st.z + 70) g.position.z -= 360;
       key.position.set(st.x - 4, 10, st.z + 8); key.target.position.set(st.x, 0, st.z);
       sunLight.position.set(st.x + 2, 4, st.z - 10); sunLight.target.position.set(st.x, .8, st.z);
       for (const f of flags) {

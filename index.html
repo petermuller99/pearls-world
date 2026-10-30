@@ -164,6 +164,12 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
         <button class="chip" data-d="normal" aria-pressed="true">🙂 Normal</button>
         <button class="chip" data-d="hard" aria-pressed="false">🔥 Hard</button>
       </div>
+      <div class="diff" id="gfx" role="group" aria-label="Graphics">
+        <span>Graphics</span>
+        <button class="chip" data-g="auto" aria-pressed="true">✨ Auto</button>
+        <button class="chip" data-g="low" aria-pressed="false">🔋 Low</button>
+        <button class="chip" data-g="high" aria-pressed="false">💎 High</button>
+      </div>
       <p class="bank">Piggy bank: <b id="bank">0</b> pearls · Longest walk: <b id="best">0</b> m</p>
       <button class="btn go install" id="installBtn" hidden>Put Pearl's World on this phone</button>
     </div>
@@ -276,5 +282,6 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
   </section>
 </div>
 
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 <script type="module" src="js/main.js"></script>
 </html>

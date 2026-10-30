@@ -1,7 +1,7 @@
 // Daddy: cheers Pearl on at milestones, jogs up now and then to toss her a power-up,
 // and stands with the family on the menu and end card. His look is set in "Daddy's look"
 // (`pw_dad_look`) and his photo is kept on the phone (`pw_dad_face`).
-import { THREE, M, G, mesh, rand, damp, tex, makePearl, posePearl, setMermaid, applyPhoto, getOutfit } from './common.js';
+import { THREE, M, G, mesh, rand, damp, tex, makePearl, posePearl, setMermaid, applyPhoto, getOutfit, outlined } from './common.js';
 import { sfx } from './audio.js';
 
 export const DAD_LOOKS = {
@@ -26,6 +26,8 @@ const D = {
   cap: new THREE.MeshLambertMaterial({ color: 0xe8333a }),
   robe: new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
 };
+outlined(D.skin, D.hair, D.shirt, D.trousers, D.shoe, D.fila, D.cap, D.robe);
+
 // Outfit textures: agbada cream with gold embroidery, senator navy with a gold band,
 // a green football jersey with DADDY 1 on the back, and a plain polo.
 const OUTFIT = {

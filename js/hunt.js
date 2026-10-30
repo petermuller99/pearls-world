@@ -1,6 +1,6 @@
 // Pearl Hunt: Pearl the little mermaid swims toward -z through the lagoon.
 // Touch where you want her to go: she glides to that spot in the water in front of her.
-import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, textSprite, COL } from './common.js';
+import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, textSprite, COL, outlined } from './common.js';
 import { sfx } from './audio.js';
 import { makeMum, makePowerItem, animatePowerItem, POWERS } from './chase.js';
 import { createDaddy } from './daddy.js';
@@ -34,9 +34,29 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
   const floorMat = new THREE.MeshLambertMaterial({ map: sandTex });
   const floors = [];
   for (let i = 0; i < 7; i++) {
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(40, SEG), floorMat);
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(40, SEG), floorMat); f.receiveShadow = true; f.userData.noShadow = true;
     f.rotation.x = -Math.PI / 2; f.position.z = -i * SEG; world.add(f); floors.push(f);
   }
+  // Caustics: the wobbly web of sunlight on the sea floor, two layers drifting past each other.
+  const causticTex = tex(256, 256, (c, w, h) => {
+    c.clearRect(0, 0, w, h); c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineCap = 'round';
+    for (let i = 0; i < 70; i++) {
+      const x = rand(0, w), y = rand(0, h), r = rand(14, 34);
+      c.lineWidth = rand(1.5, 3.5);
+      // Draw each ring at its wrapped positions too, so the texture tiles seamlessly.
+      for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) {
+        c.beginPath();
+        for (let a = 0; a <= 7; a += .35) { const rr = r * (1 + Math.sin(a * 3 + i) * .25); c.lineTo(x + ox + Math.cos(a) * rr, y + oy + Math.sin(a) * rr); }
+        c.stroke();
+      }
+    }
+  }, true);
+  const caustics = [1, 2].map(k => {
+    const t = causticTex.clone(); t.needsUpdate = true; t.repeat.set(5 * k * .8, 18 * k * .8);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(40, 140), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.y = .03 + k * .01; m.userData.noShadow = true; world.add(m);
+    return { m, t, k };
+  });
 
   const D = {
     weed: new THREE.MeshLambertMaterial({ color: 0x2f9e6a }),
@@ -177,6 +197,7 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
     octoSpot: new THREE.MeshLambertMaterial({ color: 0xb98af0 }),
     ink: new THREE.MeshLambertMaterial({ color: 0x2a1640 }),
   };
+  outlined(A.puffer, A.octo);
   const spikeGeo = new THREE.ConeGeometry(.05, .16, 5);
   function grumpyFace(g, z, sx, y = .06) {
     for (const s of [-1, 1]) {
@@ -301,7 +322,7 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
     items,
     startBanner: 'Find the pearls!',
     hint: 'Touch where you want Pearl to swim.',
-    world, st,
+    world, st, shadowLight: top,
     enter() {
       world.visible = true; scene.background = sky; scene.fog = fog;
       setMermaid(P, true);
@@ -354,7 +375,7 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
       if (st.waveT > 0) st.waveT -= dt;
       st.turn = damp(st.turn, st.waveT > 0 ? 1 : 0, 6, dt);
       st.wave = damp(st.wave, st.waveT > 0 || !playing ? 1 : 0, 6, dt);
-      posePearl(P, { ph: st.ph, swim: true, idle: idle || st.turn > .5, turn: st.turn, wave: st.wave, t: S.t });
+      posePearl(P, { ph: st.ph, swim: true, idle: idle || st.turn > .5, turn: st.turn, wave: st.wave, t: S.t, oops: S.stumble > 0 });
       P.root.position.set(st.x, st.y, st.z);
       P.root.rotation.set(playing ? THREE.MathUtils.clamp(st.vy * .12, -.4, .4) * (1 - st.turn) : 0, 0, playing ? THREE.MathUtils.clamp(-st.vx * .1, -.35, .35) : 0);
       P.shadow.position.y = .02 - st.y; P.shadow.scale.setScalar(Math.max(.2, .55 - st.y * .07));
@@ -477,6 +498,11 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
       }
 
       for (const f of floors) if (f.position.z > st.z + SEG * 1.5) f.position.z -= SEG * floors.length;
+      for (const c of caustics) {
+        // The plane follows Pearl; the pattern stays fixed to the sea floor and drifts gently.
+        c.m.position.z = st.z - 50;
+        c.t.offset.set(S.t * .02 * (c.k === 1 ? 1 : -1), -c.m.position.z / 140 * c.t.repeat.y + S.t * .015 * c.k);
+      }
       for (const o of decor) {
         if (o.position.z > st.z + 8) { const [a, b] = o.userData.range; o.position.z -= DECOR_SPAN; o.position.x = (Math.random() < .5 ? -1 : 1) * rand(a, b); }
         if (o.userData.segs) o.userData.segs.forEach((s, k) => { s.rotation.z = Math.sin(S.t * 1.4 + o.userData.ph + k * .7) * .18; s.rotation.x = Math.cos(S.t * 1.1 + o.userData.ph + k) * .1; });

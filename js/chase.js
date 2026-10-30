@@ -1,5 +1,5 @@
 // Shared by both games: Mummy chasing Pearl, power-ups, fireballs and the shield bubble.
-import { THREE, M, G, mesh, rand, damp, makePearl, posePearl, setMermaid, getOutfit, applyPhoto, LOOKS } from './common.js';
+import { THREE, M, G, mesh, rand, damp, makePearl, posePearl, setMermaid, getOutfit, applyPhoto, LOOKS, outlined } from './common.js';
 import { sfx } from './audio.js';
 
 // The chase gap: how far ahead of Mummy Pearl is. 0 means caught.
@@ -29,6 +29,7 @@ const MM = {
   gele: new THREE.MeshLambertMaterial({ map: getOutfit('sun') }),
   frame: new THREE.MeshBasicMaterial({ color: 0x1a1020 }),
 };
+outlined(MM.skin, MM.hair, MM.dress, MM.gele);
 const mumFigures = [];
 let lastMum = null;
 export function applyMumLook(look, list = mumFigures) {
@@ -163,7 +164,8 @@ export function animatePowerItem(g, t, dt) {
 
 /* ---------- fireballs, shield bubble ---------- */
 export function createPowers(scene, P, S, { banner, hud }) {
-  const core = new THREE.MeshBasicMaterial({ color: 0xffe066 });
+  // Brighter than white so the fireball glows on High graphics.
+  const core = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.2, .6) });
   const glow = new THREE.MeshBasicMaterial({ color: 0xff6a00, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false });
   const ember = new THREE.MeshBasicMaterial({ color: 0xff9a2a, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });
   const balls = [], embers = [];
