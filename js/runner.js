@@ -1,5 +1,6 @@
 // First Steps: Pearl crawls, toddles and runs toward -z along the Lekki-Ikoyi Link Bridge.
-import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, sfx, store, COL } from './common.js';
+import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, store, COL } from './common.js';
+import { sfx } from './audio.js';
 
 const LANES = [-1.5, 0, 1.5];
 const MILESTONES = [
@@ -7,9 +8,12 @@ const MILESTONES = [
   { m: 520, t: 'First steps!', stage: 1 }, { m: 800, t: 'Walking like a pro!' }, { m: 1100, t: 'Off she runs!', stage: 2 },
   { m: 1500, t: 'Happy 1st birthday, Pearl!' }, { m: 2100, t: 'Big girl now!' }, { m: 3000, t: 'Unstoppable Pearl!' }];
 const STAGE_SPEED = [5, 7, 9.5];
+// Difficulty: a new level every 200 m. Speed keeps creeping up with distance on top of
+// the crawl/toddle/run base, toys come closer together, and new tricks unlock.
+const LEVEL_EVERY = 200, MAX_LEVEL = 12, MAX_SPEED = 17;
 const DECK_W = 13, SEG = 20, PYLON_GAP = 110;
 
-export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
+export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp }) {
   const world = new THREE.Group(); world.visible = false; scene.add(world);
   const sky = gradientTex([[0, '#ff8f6b'], [.55, '#ffc58a'], [1, '#ffe3b0']]);
   const fog = new THREE.Fog(0xffd9a8, 40, 170);
@@ -162,8 +166,8 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
     world.add(g); return g;
   }
   const vehicles = [
-    { m: makeDanfo(), x: -4.5, v: 13 }, { m: makeKeke(), x: 4.5, v: 11 },
-    { m: makeDanfo(), x: 4.5, v: 15 }, { m: makeKeke(), x: -4.5, v: 9 },
+    { m: makeDanfo(), x: -4.5, v: 13, kind: 'danfo' }, { m: makeKeke(), x: 4.5, v: 11, kind: 'keke' },
+    { m: makeDanfo(), x: 4.5, v: 15, kind: 'danfo' }, { m: makeKeke(), x: -4.5, v: 9, kind: 'keke' },
   ];
   vehicles.forEach((o, i) => { o.m.position.set(o.x, 0, -20 - i * 25); o.m.rotation.y = Math.PI; });
 
@@ -191,17 +195,28 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
     holder.position.set(LANES[lane], 0, z);
     if (kind === 'block' || kind === 'ball') { const sh = mesh(G.shadow, M.shadow, kind === 'ball' ? .38 : .5); sh.position.y = .015; holder.add(sh); }
     world.add(holder);
-    items.push({ kind, lane, z, m, holder, baseY: m.position.y, gone: false, fly: 0 });
+    const it = { kind, lane, z, m, holder, baseY: m.position.y, gone: false, fly: 0, vz: 0 };
+    items.push(it); return it;
   }
   function clearItems() { for (const it of items) world.remove(it.holder); items.length = 0; }
 
   function spawnRow(z) {
-    // Never block all three lanes: one obstacle lane, pearls in another.
+    // Never block all three lanes: at most two lanes get toys, pearls go in a free one.
+    const lv = st.level;
     const obstLane = Math.floor(Math.random() * 3);
-    const roll = Math.random();
-    if (roll < .78) addItem(Math.random() < .55 ? 'block' : 'ball', obstLane, z);
-    const pl = (obstLane + 1 + Math.floor(Math.random() * 2)) % 3;
-    if (Math.random() < .35 && roll < .78) {
+    const roll = Math.random(), hasObst = roll < Math.min(.95, .72 + lv * .03);
+    let pl = (obstLane + 1 + Math.floor(Math.random() * 2)) % 3;
+    if (hasObst) {
+      if (lv >= 4 && Math.random() < Math.min(.4, (lv - 3) * .08)) {
+        // A beach ball rolling toward Pearl, from further away.
+        const b = addItem('ball', obstLane, z - 12); b.vz = rand(2, 3.2) + lv * .15;
+      } else addItem(Math.random() < .55 ? 'block' : 'ball', obstLane, z);
+      if (lv >= 3 && Math.random() < Math.min(.45, (lv - 2) * .07)) {
+        const second = 3 - obstLane - pl;
+        addItem('block', second, z);
+      }
+    }
+    if (Math.random() < .35 && hasObst) {
       // An arc of pearls over the obstacle, to reward jumping.
       for (let k = -2; k <= 2; k++) addItem('pearl', obstLane, z + k * .9, 1.1 - k * k * .2);
     } else {
@@ -211,13 +226,13 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
   }
 
   /* ---------- state ---------- */
-  const R0 = { z: 0, speed: 0, stage: 0, lane: 1, x: 0, y: 0, vy: 0, jumps: 0, ph: 0, ms: 0, nextSpawn: 0, wave: 0, turn: 0, waveT: 0, startZ: 0, dist: 0 };
+  const R0 = { level: 1, hornT: 0, z: 0, speed: 0, stage: 0, lane: 1, x: 0, y: 0, vy: 0, jumps: 0, ph: 0, ms: 0, nextSpawn: 0, wave: 0, turn: 0, waveT: 0, startZ: 0, dist: 0 };
   const st = { ...R0 };
   let touch = null;
   const tmpV = new THREE.Vector3();
 
   function moveLane(d) { const n = THREE.MathUtils.clamp(st.lane + d, 0, 2); if (n !== st.lane) { st.lane = n; sfx.swish(); } }
-  function jump() { if (st.jumps < 2) { st.vy = st.jumps ? 6.2 : 7.2; st.jumps++; sfx.jump(); } }
+  function jump() { if (st.jumps < 2) { st.vy = st.jumps ? 6.2 : 7.2; (st.jumps ? sfx.doubleJump : sfx.jump)(); st.jumps++; } }
 
   return {
     id: 'run',
@@ -231,9 +246,9 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
     exit() { world.visible = false; clearItems(); },
     start() {
       clearItems();
-      Object.assign(st, { speed: STAGE_SPEED[0], stage: 0, lane: 1, y: 0, vy: 0, jumps: 0, ms: 0, nextSpawn: st.z - 24, wave: 0, turn: 0, waveT: 0, startZ: st.z, dist: 0 });
+      Object.assign(st, { speed: STAGE_SPEED[0], stage: 0, lane: 1, y: 0, vy: 0, jumps: 0, ms: 0, nextSpawn: st.z - 24, wave: 0, turn: 0, waveT: 0, startZ: st.z, dist: 0, level: 1, hornT: 0 });
     },
-    scoreText() { return `${S.pearls} pearls · ${Math.floor(st.dist)} m`; },
+    scoreText() { return `${S.pearls} pearls · ${Math.floor(st.dist)} m · Level ${st.level || 1}`; },
     finish(bank) {
       const m = Math.floor(st.dist), best = store.get('pw_best', 0);
       const rec = m > best; if (rec) store.set('pw_best', m);
@@ -245,16 +260,18 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
     },
     update(dt) {
       const playing = S.mode === 'play';
-      st.speed = playing ? damp(st.speed, STAGE_SPEED[st.stage] + (st.stage === 2 ? Math.min(3, st.dist / 900) : 0), 1.5, dt) : damp(st.speed, 0, 3, dt);
+      st.speed = playing ? damp(st.speed, Math.min(MAX_SPEED, STAGE_SPEED[st.stage] + st.dist * .0035), 1.5, dt) : damp(st.speed, 0, 3, dt);
       st.z -= st.speed * dt;
       if (playing) {
         st.dist = st.startZ - st.z;
         if (Math.floor(st.dist) !== st.shownDist) { st.shownDist = Math.floor(st.dist); hud(); }
+        const lv = Math.min(MAX_LEVEL, 1 + Math.floor(st.dist / LEVEL_EVERY));
+        if (lv > st.level) { st.level = lv; levelUp(lv); hud(); }
       }
 
       st.x = damp(st.x, playing || S.mode === 'over' ? LANES[st.lane] : 0, 12, dt);
       st.vy -= 20 * dt; st.y += st.vy * dt;
-      if (st.y <= 0) { st.y = 0; st.vy = 0; st.jumps = 0; }
+      if (st.y <= 0) { if (st.vy < -3 && playing) sfx.land(); st.y = 0; st.vy = 0; st.jumps = 0; }
       const air = st.y > .02;
       const stage = playing ? st.stage : 1, idle = !playing && st.speed < .6;
       st.ph += dt * (stage === 0 ? 1.6 : stage === 1 ? 1.3 : 1.15) * Math.max(st.speed, 1);
@@ -269,19 +286,20 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
       if (playing) {
         const next = MILESTONES[st.ms];
         if (next && st.dist >= next.m) {
-          st.ms++; banner(next.t); sfx.yay(); confetti.burst(tmpV.set(st.x, 1.2, st.z - 1), 60);
+          st.ms++; banner(next.t); sfx.milestone(); confetti.burst(tmpV.set(st.x, 1.2, st.z - 1), 60);
           if (next.stage != null) st.stage = next.stage;
           st.waveT = 1.8;
           // Clear the way while she turns round to wave at Daddy.
           for (const it of items) if (!it.gone && (it.kind === 'block' || it.kind === 'ball') && it.z < st.z && it.z > st.z - st.speed * 3) { it.gone = true; it.fly = 1; }
         }
-        while (st.nextSpawn > st.z - 70) { spawnRow(st.nextSpawn); st.nextSpawn -= rand(9, 14) + st.speed * .4; }
+        while (st.nextSpawn > st.z - 70) { spawnRow(st.nextSpawn); st.nextSpawn -= Math.max(6, rand(9, 14) - st.level * .5) + st.speed * .35; }
       }
 
       for (let i = items.length - 1; i >= 0; i--) {
         const it = items[i];
         if (it.kind === 'pearl') { it.m.position.y = it.baseY + Math.sin(S.t * 4 + it.z) * .06; it.m.rotation.y += dt * 2; }
         if (it.kind === 'bottle') it.m.rotation.y += dt * 2.5;
+        if (it.vz && !it.fly) { it.z += it.vz * dt; it.holder.position.z = it.z; it.m.rotation.x += it.vz * dt / .38; }
         if (it.fly > 0) {
           it.fly -= dt * 1.4; it.holder.position.y += dt * 9; it.holder.position.x += dt * (it.lane - 1 || 1) * 5;
           it.m.rotation.x += dt * 8; it.holder.scale.setScalar(Math.max(.01, it.fly));
@@ -299,11 +317,11 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
         } else if (it.kind === 'bottle') {
           if (dz < .6 && dx < .6 && st.y < .8) {
             world.remove(it.holder); items.splice(i, 1);
-            S.hearts = Math.min(3, S.hearts + 1); sfx.heart(); banner('Milk time! +1 heart'); hud();
+            S.hearts = Math.min(3, S.hearts + 1); sfx.bottle(); sfx.heart(); banner('Milk time! +1 heart'); hud();
           }
         } else if (dz < .55 && dx < .62 && st.y < (it.kind === 'block' ? .72 : .66) && S.inv <= 0) {
           it.gone = true; it.fly = 1;
-          hurt(S.hearts === 2 ? 'Careful, Pearl! One heart left' : 'Oopsie! Up you get');
+          hurt(S.hearts === 2 ? 'Careful, Pearl! One heart left' : 'Oopsie! Up you get', sfx.hit);
         }
       }
 
@@ -311,8 +329,12 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud }) {
       for (const p of pylons) if (p.position.z > st.z + 30) p.position.z -= PYLON_GAP * pylons.length;
       for (const b of buildings) if (b.position.z > st.z + 40) { b.position.z -= 44 * 9; b.position.x = b.userData.s * rand(38, 75); }
       for (const p of palms) if (p.position.z > st.z + 25) p.position.z -= 6 * 30;
+      st.hornT -= dt;
       for (const v of vehicles) {
+        const before = v.m.position.z - st.z;
         v.m.position.z -= v.v * dt * (S.mode === 'over' ? .4 : 1);
+        // Danfos honk and keke beep as they pass Pearl. Lagos!
+        if (playing && before > 0 && v.m.position.z - st.z <= 0 && st.hornT <= 0 && Math.random() < .7) { (v.kind === 'keke' ? sfx.keke : sfx.danfo)(); st.hornT = 2.5; }
         if (v.m.position.z < st.z - 160) v.m.position.z = st.z + rand(15, 40);
         if (v.m.position.z > st.z + 40) v.m.position.z = st.z - rand(60, 150);
       }

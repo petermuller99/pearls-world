@@ -30,15 +30,35 @@ export function gradientTex(stops) {
     c.fillStyle = g; c.fillRect(0, 0, w, h);
   });
 }
-const ankaraTex = tex(256, 128, (c, w, h) => {
-  c.fillStyle = '#ff6b4a'; c.fillRect(0, 0, w, h);
-  for (let y = 0; y < h; y += 32) for (let x = (y / 32 % 2) * 16; x < w; x += 32) {
-    c.fillStyle = '#ffc93c'; c.beginPath(); c.arc(x, y + 16, 10, 0, 7); c.fill();
-    c.fillStyle = '#24163d'; c.beginPath(); c.arc(x, y + 16, 5, 0, 7); c.fill();
-    c.fillStyle = '#fff8f0'; c.beginPath(); c.arc(x, y + 16, 2, 0, 7); c.fill();
-  }
-  c.fillStyle = '#0f8a8f'; c.fillRect(0, h - 10, w, 6);
-}, true);
+function ankara([base, ring, dot, trim]) {
+  return tex(256, 128, (c, w, h) => {
+    c.fillStyle = base; c.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 32) for (let x = (y / 32 % 2) * 16; x < w; x += 32) {
+      c.fillStyle = ring; c.beginPath(); c.arc(x, y + 16, 10, 0, 7); c.fill();
+      c.fillStyle = dot; c.beginPath(); c.arc(x, y + 16, 5, 0, 7); c.fill();
+      c.fillStyle = '#fff8f0'; c.beginPath(); c.arc(x, y + 16, 2, 0, 7); c.fill();
+    }
+    c.fillStyle = trim; c.fillRect(0, h - 10, w, 6);
+  }, true);
+}
+
+/* ---------- Pearl's look: the choices in the "Pearl's look" menu ---------- */
+export const LOOKS = {
+  skin: ['#d9a77e', '#c68a5e', '#a86b45', '#8a5a3c', '#6e4630', '#55362a', '#3f281f'],
+  hair: [['puffs', 'Two puffs'], ['puff', 'One puff'], ['curls', 'Short curls'], ['gele', 'Gele']],
+  hairColor: ['#140c0a', '#2b1a12', '#4a2a18'],
+  bow: ['#ff5c8a', '#ff6b4a', '#ffc93c', '#0f8a8f', '#fff8f0', 'none'],
+  outfit: {
+    coral: ['#ff6b4a', '#ffc93c', '#24163d', '#0f8a8f'],
+    lagoon: ['#0f8a8f', '#ffc93c', '#ff6b4a', '#fff8f0'],
+    pink: ['#ff5c8a', '#fff8f0', '#6b4fc9', '#ffc93c'],
+    sun: ['#ffc93c', '#ff6b4a', '#24163d', '#3aa655'],
+    purple: ['#6b4fc9', '#ffc93c', '#ff5c8a', '#fff8f0'],
+  },
+};
+export const DEFAULT_LOOK = { skin: '#8a5a3c', hair: 'puffs', hairColor: '#2b1a12', bow: '#ff5c8a', outfit: 'coral' };
+const outfitTex = {};
+const getOutfit = k => outfitTex[k] || (outfitTex[k] = ankara(LOOKS.outfit[k] || LOOKS.outfit.coral));
 const scaleTex = tex(128, 128, (c, w, h) => {
   c.fillStyle = '#1fb5a8'; c.fillRect(0, 0, w, h);
   c.strokeStyle = '#7fe3d2'; c.lineWidth = 3;
@@ -54,7 +74,9 @@ export const M = {
   eye: new THREE.MeshBasicMaterial({ color: 0x1a1020 }),
   white: new THREE.MeshBasicMaterial({ color: 0xffffff }),
   cheek: new THREE.MeshBasicMaterial({ color: 0xff8a8a, transparent: true, opacity: .45 }),
-  dress: new THREE.MeshLambertMaterial({ map: ankaraTex }),
+  dress: new THREE.MeshLambertMaterial({ map: getOutfit('coral') }),
+  bow: new THREE.MeshLambertMaterial({ color: COL.blush }),
+  gele: new THREE.MeshLambertMaterial({ map: getOutfit('sun') }),
   shoe: new THREE.MeshLambertMaterial({ color: COL.pearl }),
   tail: new THREE.MeshLambertMaterial({ map: scaleTex }),
   fin: new THREE.MeshLambertMaterial({ color: 0x7fe3d2, side: THREE.DoubleSide }),
@@ -108,9 +130,24 @@ export function makePearl() {
   head.add(mesh(G.sphere, M.skin, .36));
   const cap = new THREE.Mesh(new THREE.SphereGeometry(.375, 24, 12, 0, Math.PI * 2, 0, Math.PI * .42), M.hair);
   cap.rotation.x = -.35; head.add(cap);
-  for (const s of [-1, 1]) { const bun = mesh(G.sphere, M.hair, .17); bun.position.set(s * .3, .26, -.05); head.add(bun); }
+  const hairs = { puffs: new THREE.Group(), puff: new THREE.Group(), curls: new THREE.Group(), gele: new THREE.Group() };
+  for (const g of Object.values(hairs)) head.add(g);
+  for (const s of [-1, 1]) { const bun = mesh(G.sphere, M.hair, .17); bun.position.set(s * .3, .26, -.05); hairs.puffs.add(bun); }
+  const top = mesh(G.sphere, M.hair, .25, .22, .25); top.position.set(0, .38, -.1); hairs.puff.add(top);
+  for (let i = 0; i < 26; i++) {
+    // Little curls scattered over the top and back of the head.
+    const a = i * 2.4, up = .25 + (i % 7) / 7 * .9;
+    const c = mesh(G.lowSphere, M.hair, .085);
+    c.position.set(Math.cos(a) * Math.cos(up) * .37, Math.sin(up) * .37 + .02, Math.sin(a) * Math.cos(up) * .37 - .05);
+    if (c.position.z > .22 && c.position.y < .2) continue;
+    hairs.curls.add(c);
+  }
+  // Gele: a wrapped headtie with a tall fanned knot, in ankara.
+  const wrap = new THREE.Mesh(new THREE.SphereGeometry(.4, 24, 12, 0, Math.PI * 2, 0, Math.PI * .45), M.gele); wrap.rotation.x = -.3; hairs.gele.add(wrap);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(.36, .07, 8, 28), M.gele); band.rotation.x = Math.PI / 2 - .3; band.position.y = .1; hairs.gele.add(band);
+  for (let i = 0; i < 5; i++) { const f = mesh(G.sphere, M.gele, .2, .11, .05); f.position.set((i - 2) * .1, .45 + Math.abs(i - 2) * -.03, -.1); f.rotation.set(-.3, 0, (i - 2) * .45); hairs.gele.add(f); }
   const bow = new THREE.Group(); bow.position.set(.17, .33, -.06); bow.rotation.set(-.5, 0, -.45); head.add(bow);
-  for (const s of [-1, 1]) { const w = mesh(G.sphere, M.blush, .13, .09, .06); w.position.x = s * .11; w.rotation.z = s * .35; bow.add(w); }
+  for (const s of [-1, 1]) { const w = mesh(G.sphere, M.bow, .13, .09, .06); w.position.x = s * .11; w.rotation.z = s * .35; bow.add(w); }
   bow.add(mesh(G.sphere, M.bowKnot, .055));
 
   const face = new THREE.Group(); head.add(face);
@@ -124,13 +161,13 @@ export function makePearl() {
 
   // Photo face: a curved patch on the front of the head, shown when Daddy has added a photo.
   const photoMat = new THREE.MeshLambertMaterial({ transparent: true });
-  const W = 1.35;
+  const W = 1.5;
   const photo = new THREE.Mesh(new THREE.SphereGeometry(.366, 24, 16, Math.PI / 2 - W / 2, W, Math.PI / 2 - W / 2 + .08, W), photoMat);
   photo.visible = false; head.add(photo);
 
   const shadow = mesh(G.shadow, M.shadow, .38); shadow.position.y = .015; root.add(shadow);
 
-  return { root, inner, hips, torso, head, arms, legs, tail, tailSegs, face, photo, photoMat, shadow };
+  return { root, inner, hips, torso, head, arms, legs, tail, tailSegs, face, photo, photoMat, shadow, cap, hairs, bow };
 }
 
 export function setMermaid(P, on) {
@@ -138,20 +175,53 @@ export function setMermaid(P, on) {
   P.legs.forEach(l => { l.visible = !on; });
 }
 
+export function applyLook(P, look) {
+  const L = { ...DEFAULT_LOOK, ...look };
+  M.skin.color.set(L.skin);
+  M.hair.color.set(L.hairColor);
+  for (const [k, g] of Object.entries(P.hairs)) g.visible = k === L.hair;
+  P.cap.visible = L.hair !== 'gele';
+  P.bow.visible = L.bow !== 'none' && L.hair !== 'gele';
+  if (L.bow !== 'none') M.bow.color.set(L.bow);
+  M.dress.map = getOutfit(L.outfit); M.dress.needsUpdate = true;
+  M.gele.map = getOutfit(L.outfit === 'sun' ? 'coral' : 'sun'); M.gele.needsUpdate = true;
+}
+
 // Shows Daddy's photo on Pearl's face, or the cartoon face when url is empty.
-export function applyPhoto(P, url) {
+// The photo's edge fades out so it blends into her head. `onSkin` gets the skin
+// tone read from the middle of the photo, so her body can match her face.
+export function applyPhoto(P, url, onSkin) {
   if (!url) { P.photo.visible = false; P.face.visible = true; return; }
   const im = new Image();
   im.onload = () => {
     const t = tex(256, 256, (c, w, h) => {
-      c.save(); c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 4, 0, 7); c.clip();
-      c.drawImage(im, 0, 0, w, h); c.restore();
+      c.drawImage(im, 0, 0, w, h);
+      c.globalCompositeOperation = 'destination-in';
+      const g = c.createRadialGradient(w / 2, h / 2, w * .34, w / 2, h / 2, w / 2);
+      g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
     });
     if (P.photoMat.map) P.photoMat.map.dispose();
     P.photoMat.map = t; P.photoMat.needsUpdate = true;
     P.photo.visible = true; P.face.visible = false;
+    if (onSkin) onSkin(skinFromPhoto(im));
   };
   im.src = url;
+}
+// Average colour of the cheeks and nose area, skipping very dark and very bright pixels.
+function skinFromPhoto(im) {
+  const c = document.createElement('canvas'); c.width = c.height = 40;
+  const x = c.getContext('2d'); x.drawImage(im, 0, 0, 40, 40);
+  const d = x.getImageData(10, 16, 20, 14).data;
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const l = (d[i] + d[i + 1] + d[i + 2]) / 3;
+    if (l < 25 || l > 235) continue;
+    r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
+  }
+  if (!n) return null;
+  const hex = v => Math.round(v / n).toString(16).padStart(2, '0');
+  return '#' + hex(r) + hex(g) + hex(b);
 }
 
 // Poses: stage 0 crawl, 1 toddle, 2 run, or `swim` for the mermaid.
@@ -226,30 +296,6 @@ export function makeConfetti(scene) {
     clear() { for (const c of bits) { c.life = 0; c.m.visible = false; } },
   };
 }
-
-/* ---------- sound ---------- */
-let AC = null;
-export const audio = { muted: store.get('pw_mute', false) };
-export function tone(f, d, type, v, delay) {
-  if (audio.muted) return;
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
-    const t0 = AC.currentTime + (delay || 0), o = AC.createOscillator(), g = AC.createGain();
-    o.type = type || 'sine'; o.frequency.setValueAtTime(f, t0);
-    g.gain.setValueAtTime(v || .12, t0); g.gain.exponentialRampToValueAtTime(.001, t0 + d);
-    o.connect(g); g.connect(AC.destination); o.start(t0); o.stop(t0 + d + .02);
-  } catch (e) {}
-}
-export const sfx = {
-  pearl() { tone(988, .09, 'sine', .1); tone(1480, .12, 'sine', .08, .06); },
-  jump() { tone(420, .12, 'triangle', .08); },
-  hit() { tone(180, .25, 'triangle', .18); },
-  yay() { [523, 659, 784, 1047].forEach((f, i) => tone(f, .18, 'square', .05, i * .09)); },
-  heart() { tone(660, .1, 'sine', .1); tone(880, .15, 'sine', .1, .08); },
-  swish() { tone(560, .08, 'sine', .06); },
-  oyster() { tone(784, .1, 'sine', .1); tone(988, .1, 'sine', .1, .08); tone(1319, .16, 'sine', .1, .16); },
-  bubble() { tone(rand(500, 800), .06, 'sine', .04); },
-};
 
 // Text on a sprite, used for speech bubbles and floating "+3".
 export function textSprite(text, { color = '#24163d', bg = '#fff8f0', size = 44, pad = 18, border = '#24163d' } = {}) {
