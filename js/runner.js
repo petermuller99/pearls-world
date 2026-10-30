@@ -282,7 +282,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     // Power-ups. The first few rows always offer fireballs so Pearl learns to throw them.
     st.rows++;
     if (st.rows === 4) addItem('fire', pl, z - 7);
-    else if (Math.random() < .11) addItem(POWERS[Math.floor(Math.random() * POWERS.length)], pl, z - 7);
+    else if (Math.random() < .11 * S.up.luck) addItem(POWERS[Math.floor(Math.random() * POWERS.length)], pl, z - 7);
   }
 
   /* ---------- state ---------- */
@@ -408,7 +408,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
         const dz = Math.abs(it.z - st.z), dx = Math.abs(LANES[it.lane] - st.x);
         if (it.kind === 'pearl') {
           // The magnet pulls in pearls from every lane a little way ahead.
-          const pulled = S.magnetT > 0 && it.z < st.z + .5 && it.z > st.z - 7;
+          const pulled = S.magnetT > 0 && it.z < st.z + .5 && it.z > st.z - S.up.magnetReach;
           if (pulled || (dz < .6 && dx < .6 && Math.abs(it.m.position.y - (st.y + .6)) < .7)) {
             world.remove(it.holder); items.splice(i, 1);
             S.pearls++; sfx.pearl(); confetti.burst(tmpV.set(LANES[it.lane], it.m.position.y, it.z), 4); hud();

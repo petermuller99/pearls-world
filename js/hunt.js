@@ -255,7 +255,7 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
     if (lv >= 2 && Math.random() < Math.min(.3, (lv - 1) * .06) * S.diff.attack) addOcto(rand(X_MIN + .4, X_MAX - .4), rand(Y_MIN + .6, Y_MAX - .4), z - rand(10, 14));
     // Power-ups. An early one is always fireballs so Pearl learns to throw them.
     st.rows++;
-    const pw = st.rows === 3 ? 'fire' : Math.random() < .12 ? POWERS[Math.floor(Math.random() * POWERS.length)] : null;
+    const pw = st.rows === 3 ? 'fire' : Math.random() < .12 * S.up.luck ? POWERS[Math.floor(Math.random() * POWERS.length)] : null;
     if (pw) addPower(pw, rand(X_MIN + .4, X_MAX - .4), rand(Y_MIN + .4, Y_MAX - .5), z - rand(3, 6));
   }
 
@@ -374,7 +374,7 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
         if (it.kind === 'pearl') {
           it.m.rotation.y += dt * 2; it.m.position.y = it.y + Math.sin(S.t * 2 + it.z) * .05;
           // The magnet pulls in every pearl a little way ahead.
-          const pulled = S.magnetT > 0 && it.z < st.z + .5 && it.z > st.z - 7;
+          const pulled = S.magnetT > 0 && it.z < st.z + .5 && it.z > st.z - S.up.magnetReach;
           if (playing && (pulled || (Math.abs(it.z - st.z) < .5 && Math.hypot(it.x - cx, it.m.position.y - cy) < .55))) {
             removeItem(i); S.pearls++; sfx.pearl(); confetti.burst(tmpV.set(it.x, it.y, it.z), 4, 2); hud();
           }
