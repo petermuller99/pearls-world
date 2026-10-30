@@ -52,7 +52,7 @@ if (document.fonts && document.fonts.load) document.fonts.load('400 26px "Bagel 
 const figures = [];
 let lastLook = null;
 
-function makeDaddyFigure() {
+export function makeDaddyFigure() {
   const F = makePearl();
   F.root.scale.setScalar(1.45);
   F.root.traverse(o => {

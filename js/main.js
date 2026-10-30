@@ -8,6 +8,7 @@ import { loadUpgrades, saveUpgrades, upgradeEffects, renderShop } from './shop.j
 import { createGfx } from './gfx.js';
 import { createRunner } from './runner.js';
 import { createHunt } from './hunt.js';
+import { createZombies } from './zombies.js';
 
 const canvas = $('c');
 let renderer;
@@ -22,6 +23,8 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 400);
 const gfx = createGfx(renderer, scene, camera);
+// The camera is in the scene so the first-person blaster (a child of the camera) is drawn.
+scene.add(camera);
 function resize() {
   const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
   renderer.setSize(w, h, false);
@@ -55,7 +58,15 @@ function hud() {
   $('chase').classList.toggle('close', S.gap < 3);
   $('chase').setAttribute('aria-label', `Mummy is ${S.gap < 3 ? 'very close' : S.gap < 6 ? 'catching up' : 'far behind'}`);
   $('score').textContent = game.scoreText();
-  $('fireBtn').hidden = S.mode !== 'play' || S.ammo <= 0;
+  // Zombie Defence shows the house's health and the shooter buttons instead of the chase.
+  const z = game.id === 'zombie';
+  $('chase').hidden = z; $('houseBar').hidden = !z; $('whoBar').hidden = !z || S.mode !== 'play'; $('crosshair').hidden = !z || S.mode !== 'play';
+  if (z) {
+    $('houseFill').style.width = `${game.house}%`; $('houseBar').classList.toggle('close', game.house < 30);
+    for (const b of document.querySelectorAll('#whoBar button')) b.setAttribute('aria-pressed', String(b.dataset.who === game.who));
+    $('whoWeapon').textContent = game.whoInfo[game.who].weapon;
+  }
+  $('fireBtn').hidden = S.mode !== 'play' || S.ammo <= 0 || !!game.noFireButton;
   $('ammo').textContent = S.ammo;
   $('shieldBadge').hidden = !(S.shieldT > 0 && S.mode === 'play');
   $('magnetBadge').hidden = !(S.magnetT > 0 && S.mode === 'play');
@@ -80,11 +91,11 @@ function caught() {
   banner('Mummy caught you! Hug time!');
   endGame();
 }
-function levelUp(lv) {
+function levelUp(lv, msg = `Level ${lv}! Faster!`) {
   sfx.levelUp(); setMusicLevel(lv);
-  banner(`Level ${lv}! Faster!`);
+  banner(msg);
 }
-function updateBank() { $('bank').textContent = bank; $('best').textContent = store.get('pw_best', 0); $('shopBank').textContent = bank; }
+function updateBank() { $('bank').textContent = bank; $('best').textContent = store.get('pw_best', 0); $('zbest').textContent = store.get('pw_zbest', 0); $('shopBank').textContent = bank; }
 
 /* ---------- market stall (shop) ---------- */
 function showShop() { $('shopBank').textContent = bank; renderShop($('shopList'), upgrades, bank, buy); }
@@ -100,15 +111,15 @@ function buy(u) {
 
 const powers = createPowers(scene, P, S, { banner, hud: () => hud() });
 const ctx = { scene, P, confetti, S, hurt, boost, mumSay, say, banner, hud: () => hud(), camera, levelUp, powers };
-const games = { run: createRunner(ctx), dive: createHunt(ctx) };
+const games = { run: createRunner(ctx), dive: createHunt(ctx), zombie: createZombies({ ...ctx, endGame: () => endGame() }) };
 let game = games[store.get('pw_last', 'run')] || games.run;
 game.enter();
-gfx.setShadowLight(game.shadowLight);
+gfx.setShadowLight(game.shadowLight, game.shadowSize);
 gfx.init();
 
 function switchTo(id) {
   if (game.id === id) return;
-  game.exit(); game = games[id]; game.enter(); gfx.setShadowLight(game.shadowLight);
+  game.exit(); game = games[id]; game.enter(); gfx.setShadowLight(game.shadowLight, game.shadowSize);
   store.set('pw_last', id);
 }
 function start(id) {
@@ -144,6 +155,8 @@ function endGame() {
 /* ---------- menu ---------- */
 $('playRun').onclick = () => start('run');
 $('playDive').onclick = () => start('dive');
+$('playZombie').onclick = () => start('zombie');
+for (const b of document.querySelectorAll('#whoBar button')) b.onclick = () => { sfx.click(); game.setWho(b.dataset.who); };
 $('againBtn').onclick = () => start(game.id);
 $('menuBtn').onclick = toMenu;
 $('homeBtn').onclick = () => { if (S.mode === 'play') { endGame(); } toMenu(); };
@@ -177,7 +190,7 @@ $('quitBtn').onclick = () => { setPaused(false); endGame(); toMenu(); };
 // Fire button: throws a fireball when Pearl has some.
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (S.mode === 'play' && !S.paused) game.fire(); });
 // Hovering or focusing a game card shows its world behind the menu.
-for (const [btn, id] of [['playRun', 'run'], ['playDive', 'dive']]) {
+for (const [btn, id] of [['playRun', 'run'], ['playDive', 'dive'], ['playZombie', 'zombie']]) {
   $(btn).addEventListener('pointerenter', e => { if (e.pointerType === 'mouse' && S.mode === 'menu') switchTo(id); });
   $(btn).addEventListener('focus', () => { if (S.mode === 'menu') switchTo(id); });
 }
@@ -326,13 +339,14 @@ const front = new THREE.Vector3(), behind = new THREE.Vector3(), camTarget = new
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function update(dt) {
   S.t += dt;
-  if (S.mode === 'play') {
+  if (S.mode === 'play' && game.usesChase !== false) {
     // Pearl slowly pulls away again while she runs cleanly. Mummy gets quicker at higher levels.
     const lv = game.st.level || 1;
     S.gap = Math.min(GAP_MAX, S.gap + dt * Math.max(.04, .16 - lv * .01) * S.diff.regen * S.up.regen);
     if (S.stumble > 0) S.stumble -= dt;
     S.hudT = (S.hudT || 0) - dt; if (S.hudT <= 0) { S.hudT = .2; hud(); }
   }
+  if (S.mode === 'play' && game.usesChase === false) { S.hudT = (S.hudT || 0) - dt; if (S.hudT <= 0) { S.hudT = .25; hud(); } }
   game.update(dt);
   powers.update(dt, pos => game.fireHit(pos), game.bubbleY);
   if (S.inv > 0) { S.inv -= dt; P.inner.visible = Math.floor(S.inv * 12) % 2 === 0; } else P.inner.visible = true;
