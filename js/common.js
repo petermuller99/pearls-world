@@ -72,7 +72,7 @@ function ribbed([base, rib, lace, hole]) {
   }, true);
 }
 const outfitTex = {};
-const getOutfit = k => outfitTex[k] || (outfitTex[k] = (k === 'sage' ? ribbed : ankara)(LOOKS.outfit[k] || LOOKS.outfit.coral));
+export const getOutfit = k => outfitTex[k] || (outfitTex[k] = (k === 'sage' ? ribbed : ankara)(LOOKS.outfit[k] || LOOKS.outfit.coral));
 const sockTex = tex(64, 64, (c, w, h) => {
   c.fillStyle = '#fbf3df'; c.fillRect(0, 0, w, h);
   [['#24163d', 6], ['#ff9f4a', 18], ['#ffc93c', 30], ['#24163d', 42], ['#ff9f4a', 54]].forEach(([col, y]) => { c.fillStyle = col; c.fillRect(0, y, w, 3); });
@@ -215,7 +215,7 @@ export function makePearl() {
 
   const shadow = mesh(G.shadow, M.shadow, .38); shadow.position.y = .015; root.add(shadow);
 
-  return { root, inner, hips, torso, head, arms, legs, tail, tailSegs, face, photo, photoMat, shadow, cap, hairs, bow, headband };
+  return { dress, root, inner, hips, torso, head, arms, legs, tail, tailSegs, face, photo, photoMat, shadow, cap, hairs, bow, headband };
 }
 
 export function setMermaid(P, on) {
@@ -278,7 +278,7 @@ function skinFromPhoto(im) {
 // Poses: stage 0 crawl, 1 toddle, 2 run, or `swim` for the mermaid.
 // `turn` spins her round to face the chase camera, `wave` lifts her right hand,
 // `idle` holds her still (menu and end card).
-export function posePearl(P, { ph, stage = 1, air = false, turn = 0, wave = 0, idle = false, t = 0, swim = false }) {
+export function posePearl(P, { ph, stage = 1, air = false, turn = 0, wave = 0, idle = false, t = 0, swim = false, reach = 0 }) {
   const sw = Math.sin(ph), cw = Math.cos(ph);
   let hipY, lean, headX, armX = [0, 0], armZ = [0, 0], legX = [0, 0], bob = 0, roll = 0, tailX = 0;
   if (swim) {
@@ -311,6 +311,10 @@ export function posePearl(P, { ph, stage = 1, air = false, turn = 0, wave = 0, i
     else P.tail.rotation.x = lerp(P.tail.rotation.x, .3, wave);
     armX[1] = lerp(armX[1], 0, wave); armZ[1] = lerp(armZ[1], 2.6 + Math.sin(t * 14) * .35, wave);
     if (!air && !idle && !swim) { legX = [lerp(legX[0], sw * .3, wave), lerp(legX[1], -sw * .3, wave)]; }
+  }
+  if (reach > 0) {
+    // Both arms stretched out in front, to grab or hug.
+    for (const i of [0, 1]) { armX[i] = lerp(armX[i], -1.5 - lean, reach); armZ[i] = lerp(armZ[i], i ? .2 : -.2, reach); }
   }
   P.hips.position.y = hipY + bob;
   P.torso.rotation.set(lean, 0, roll);
