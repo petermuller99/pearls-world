@@ -54,6 +54,8 @@ p{margin:0}
 .bank{font-size:14px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
 .bank b{color:var(--ink)}
 .install{align-self:flex-start}
+.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px;font-size:16px;font-weight:600;line-height:1.4}
+.steps .share{vertical-align:-5px;background:#fff;border:2px solid var(--ink);border-radius:8px;padding:2px}
 .shop{gap:10px}
 .items{display:flex;flex-direction:column;gap:8px}
 .item{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:10px;border:3px solid var(--ink);border-radius:16px;padding:8px 10px;background:#fff}
@@ -164,6 +166,20 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
       </div>
       <p class="bank">Piggy bank: <b id="bank">0</b> pearls · Longest walk: <b id="best">0</b> m</p>
       <button class="btn go install" id="installBtn" hidden>Put Pearl's World on this phone</button>
+    </div>
+  </section>
+
+  <section id="iosPanel" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Install on iPhone or iPad</p>
+      <h2>Put it on your home screen</h2>
+      <ol class="steps">
+        <li>Open this page in <b>Safari</b> (or Chrome on iOS 16.4 and newer).</li>
+        <li>Tap the <b>Share</b> button <svg class="share" viewBox="0 0 24 24" width="22" height="22" aria-label="Share icon"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="#0a84ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11H6.5A1.5 1.5 0 0 0 5 12.5v7A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5H16" fill="none" stroke="#0a84ff" stroke-width="2.2" stroke-linecap="round"/></svg> at the bottom of Safari, or top right in Chrome.</li>
+        <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+        <li>Tap <b>Add</b>. Pearl's icon appears on your home screen and opens full screen.</li>
+      </ol>
+      <div class="row"><button class="btn big go" id="iosDone">Got it</button></div>
     </div>
   </section>
 

@@ -30,7 +30,7 @@ Shared features:
 - Defaults were matched to a photo Oluwashina shared (the photo itself is not in the repo): warm deep brown skin `#8f6038`, soft near-black baby curls `#1c1410`, a big sage headband bow `#bfe0b5`, sage ribbed romper with lace sleeves, striped socks, white sandals, tiny gold stud earrings.
 - Storage (all in the phone's localStorage for this site, no accounts or server; each phone has its own save, and clearing site data wipes it): difficulty `pw_difficulty`, upgrades `pw_upgrades`, piggy bank `pw_bank`, best walk `pw_best`, sound effects off `pw_mute`, music off `pw_music_off`, last game shown on the menu `pw_last`.
 - WebAudio beeps for sound effects.
-- Installable on phones (PWA): `manifest.webmanifest`, `sw.js` (offline cache), `icons/`. When adding files the game needs offline, list them in `sw.js` and bump its `VERSION`.
+- Installable on phones (PWA): `manifest.webmanifest`, `sw.js` (offline cache), `icons/`. Android Chrome: the menu's install button appears when Chrome offers install. iPhone/iPad can't prompt, so the button reads "Put Pearl's World on this iPhone" and opens step-by-step Share > Add to Home Screen help (`iosPanel`); it hides when opened from the home screen. When adding files the game needs offline, list them in `sw.js` and bump its `VERSION`.
 
 ## Design direction
 
