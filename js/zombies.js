@@ -22,8 +22,14 @@ const TYPES = {
   big: { hp: 14, speed: .75, scale: 1.6, dmg: 9, pearls: 4 },
   okada: { hp: 6, speed: 3.2, scale: 1, dmg: 6, pearls: 3 },
   helmet: { hp: 9, speed: 1, scale: 1.05, dmg: 5, pearls: 2 },
+  // Bosses: one arrives at the end of every wave, rotating in this order.
+  oga: { hp: 70, speed: .6, scale: 2.5, dmg: 16, pearls: 12, boss: 'Oga Zombie' },
+  danfo: { hp: 55, speed: 1.6, scale: 1.25, dmg: 22, pearls: 12, boss: 'Danfo Driver' },
+  gen: { hp: 60, speed: .7, scale: 2.1, dmg: 12, pearls: 12, boss: 'Generator Zombie' },
 };
-const CASH = { walker: 10, runner: 8, big: 30, okada: 20, helmet: 15 };
+const BOSSES = ['oga', 'danfo', 'gen'];
+const BOSS_SAYS = { oga: 'Where is Pearl?!', danfo: 'Ojuelegba! Next stop, Pearl!', gen: 'NEPA took light!' };
+const CASH = { walker: 10, runner: 8, big: 30, okada: 20, helmet: 15, oga: 75, danfo: 75, gen: 75 };
 // Defenders you plant in the yard with naira. `range` in metres, `rate` in seconds.
 export const DEFS = {
   pepper: { icon: '🌶️', name: 'Pepper Shooter', cost: 125, hp: 12, range: 13, rate: 1.3, dmg: 1.5, shot: 'pepper', speed: 20 },
@@ -188,7 +194,29 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
       const hel = new THREE.Mesh(new THREE.SphereGeometry(.35, 16, 8, 0, Math.PI * 2, 0, Math.PI * .5), Z.helmet); hel.position.y = .02; head.add(hel);
       const visor = mesh(G.box, Z.metal, .5, .06, .1); visor.position.set(0, .05, .3); head.add(visor);
     }
+    if (type === 'oga') {
+      // Oga: big belly, gold chain and a fila cap.
+      const belly = mesh(G.sphere, shirt, .36, .32, .34); belly.position.set(0, .22, .12); torso.add(belly);
+      const chain = new THREE.Mesh(new THREE.TorusGeometry(.2, .03, 6, 18), M.gold); chain.position.set(0, .6, .22); chain.rotation.x = 1.2; torso.add(chain);
+      const fila = new THREE.Mesh(new THREE.CylinderGeometry(.28, .32, .2, 14), Z.bike); fila.position.y = .3; fila.rotation.z = .2; head.add(fila);
+    }
+    if (type === 'gen') {
+      // A red generator on his back, puffing smoke.
+      const box = mesh(G.box, Z.gen, .55, .45, .4); box.position.set(0, .45, -.42); torso.add(box);
+      const pipe = mesh(G.cyl, Z.metal, .04, .3, .04); pipe.position.set(.18, .78, -.45); torso.add(pipe);
+    }
     let bike = null;
+    if (type === 'danfo') {
+      // A zombie driving a yellow danfo bus, head and arms out of the window.
+      bike = new THREE.Group(); g.add(bike);
+      const busMat = new THREE.MeshLambertMaterial({ color: 0xffc93c }); outlined(busMat);
+      const body2 = mesh(G.box, busMat, 1.9, 1.5, 3.8); body2.position.y = 1.1; bike.add(body2);
+      const stripe = mesh(G.box, Z.metal, 1.92, .16, 3.82); stripe.position.y = .75; bike.add(stripe);
+      const wind = mesh(G.box, Z.zmouth, 1.6, .55, .05); wind.position.set(0, 1.45, 1.91); bike.add(wind);
+      for (const x of [-.9, .9]) for (const z of [-1.25, 1.25]) { const w = new THREE.Mesh(G.cyl, Z.metal); w.scale.set(.36, .22, .36); w.rotation.z = Math.PI / 2; w.position.set(x, .36, z); bike.add(w); }
+      for (const x of [-.6, .6]) { const l = mesh(G.sphere, Z.lamp, .12); l.position.set(x, .8, 1.92); bike.add(l); }
+      hips.position.set(0, 1.25, 1.2); legs.forEach(l => { l.visible = false; });
+    }
     if (type === 'okada') {
       // An okada: a little red motorbike.
       bike = new THREE.Group(); g.add(bike);
@@ -203,7 +231,9 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     hp.visible = false;
     g.scale.setScalar(T.scale);
     world.add(g);
-    return { type, T, g, inner, hips, torso, head, arms, legs, bike, hp, fill, hpMax: Math.ceil(T.hp * (1 + Math.max(0, st.wave - 1) * .32)), ph: rand(0, 6), pop: 0, hit: 0, bang: 0, say: null, sayT: 0 };
+    // Bosses grow much tougher each wave; their health shows in a big bar at the top instead.
+    const grow = T.boss ? (1 + (st.wave - 1) * .6) * (.7 + S.diff.attack * .3) : 1 + Math.max(0, st.wave - 1) * .32;
+    return { type, T, g, inner, hips, torso, head, arms, legs, bike, hp, fill, hpMax: Math.ceil(T.hp * grow), boss: !!T.boss, abilityT: 3, ph: rand(0, 6), pop: 0, hit: 0, bang: 0, say: null, sayT: 0 };
   }
 
   /* ---------- shots ---------- */
@@ -257,7 +287,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
   for (const g of Object.values(VM)) { const hand = mesh(G.sphere, viewSkin, .07, .06, .1); hand.position.set(0, -.07, .12); g.add(hand); g.position.set(.28, -.26, -.55); g.traverse(o => { o.userData.noShadow = true; }); view.add(g); }
 
   /* ---------- state ---------- */
-  const st = { cash: 0, placing: null, warnL: 0, warnR: 0, autoT: 0, level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 0, house: 100, kills: 0, who: 'pearl', yaw: 0, pitch: -.05, fireT: 0, helperT: { pearl: 0, mum: .5, dad: 1 }, aim: null, holding: false, recoil: 0, groanT: 3, inside: false };
+  const st = { boss: null, bossDone: false, shake: 0, cash: 0, placing: null, warnL: 0, warnR: 0, autoT: 0, level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 0, house: 100, kills: 0, who: 'pearl', yaw: 0, pitch: -.05, fireT: 0, helperT: { pearl: 0, mum: .5, dad: 1 }, aim: null, holding: false, recoil: 0, groanT: 3, inside: false };
   const zombies = [];
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const eyePos = new THREE.Vector3(), menuPos = new THREE.Vector3(), menuQ = new THREE.Quaternion(), fpsQ = new THREE.Quaternion(), dummy = new THREE.PerspectiveCamera();
@@ -266,7 +296,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
 
   function clearZombies() { for (const z of zombies) { world.remove(z.g); if (z.say) world.remove(z.say); } zombies.length = 0; for (const s of shots) world.remove(s.g); shots.length = 0; for (const f of floats) world.remove(f.s); floats.length = 0; }
   function startWave() {
-    st.wave++; st.level = st.wave;
+    st.wave++; st.level = st.wave; st.bossDone = false;
     st.toSpawn = Math.round((7 + st.wave * 5) * (.7 + S.diff.attack * .3));
     st.spawnT = 1;
     levelUp(st.wave, st.wave === 1 ? 'Wave 1! Here they come!' : `Wave ${st.wave}! More zombies!`);
@@ -294,14 +324,32 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     z.pi = 0; z.side = side;
     zombies.push(z); st.toSpawn--;
   }
+  function spawnBoss() {
+    const type = BOSSES[(st.wave - 1) % BOSSES.length], z = makeZombie(type);
+    const side = type !== 'danfo' && st.wave >= 2 ? (Math.random() < .5 ? -1 : 1) * (Math.random() < .5 ? 1 : 0) : 0;
+    if (side) {
+      z.g.position.set(side * 38, 0, SIDE_Z);
+      z.path = [new THREE.Vector3(side * (SIDE_X + 1.5), 0, SIDE_Z), new THREE.Vector3(side * (SIDE_X - 2), 0, SIDE_Z), new THREE.Vector3(0, 0, DOOR_Z - .6)];
+    } else {
+      z.g.position.set(0, 0, -46);
+      z.path = [new THREE.Vector3(0, 0, GATE_Z - 1), new THREE.Vector3(0, 0, GATE_Z + 1.5), new THREE.Vector3(0, 0, DOOR_Z - (type === 'danfo' ? 5.5 : .6))];
+    }
+    z.pi = 0; z.side = side; z.hp.visible = false;
+    zombies.push(z); st.boss = z; st.bossDone = true;
+    banner(`BOSS: ${T_NAME(type)} is coming!`); sfx.roar(); hud();
+    z.say = saySprite(BOSS_SAYS[type]); world.add(z.say); z.sayT = 3;
+  }
+  const T_NAME = t => TYPES[t].boss;
   function popZombie(z) {
     z.pop = .001; z.hp.visible = false;
     confetti.burst(tmpV.copy(z.g.position).setY(1.2 * z.T.scale), 30);
-    S.pearls += z.T.pearls; st.kills++; st.cash += CASH[z.type]; sfx.zPop(); hud();
+    S.pearls += z.T.pearls; st.kills++; st.cash += CASH[z.type]; sfx.zPop();
+    if (z.boss) { confetti.burst(tmpV.copy(z.g.position).setY(2), 90); sfx.milestone(); banner(`${z.T.boss} popped! +₦${CASH[z.type]}`); st.boss = null; }
+    hud();
   }
   function damage(z, dmg) {
     if (z.pop) return;
-    z.life = (z.life ?? z.hpMax) - dmg; z.hit = .15; z.hp.visible = true;
+    z.life = (z.life ?? z.hpMax) - dmg; z.hit = .15; z.hp.visible = !z.boss;
     z.fill.scale.x = Math.max(.01, z.life / z.hpMax); z.fill.position.x = -.33 * (1 - z.fill.scale.x);
     sfx.zHit();
     if (z.life <= 0) popZombie(z);
@@ -421,9 +469,12 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     get cash() { return st.cash; },
     get placing() { return st.placing; },
     get warn() { return [st.warnL, st.warnR]; },
+    get bossInfo() { const b = st.boss; return b && !b.pop ? { name: b.T.boss, frac: Math.max(0, (b.life ?? b.hpMax) / b.hpMax) } : null; },
     // Choose a defender to plant (or the same one again to cancel).
     select(kind) { st.placing = st.placing === kind ? null : kind; grid.visible = !!st.placing; hud(); },
     plantAt(kind, x, z) { return plant(kind, cellAt({ x, z })); },
+    // Test hook: bring on a specific wave's boss right now.
+    testBoss(wave) { st.wave = wave; st.toSpawn = 0; st.bossDone = false; spawnBoss(); return st.boss; },
     enter() {
       world.visible = true; scene.background = sky; scene.fog = fog;
       setMermaid(P, false); P.root.rotation.set(0, 0, 0); P.inner.visible = true;
@@ -432,7 +483,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     start() {
       clearZombies();
       clearDefenders();
-      Object.assign(st, { level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 5, house: 100, kills: 0, yaw: 0, pitch: -.05, fireT: 0, aim: null, holding: false, recoil: 0, cash: S.up.zCash, placing: null, warned: false, autoT: 0 });
+      Object.assign(st, { level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 5, house: 100, kills: 0, yaw: 0, pitch: -.05, fireT: 0, aim: null, holding: false, recoil: 0, cash: S.up.zCash, placing: null, warned: false, autoT: 0, boss: null, bossDone: false, shake: 0 });
       grid.visible = false;
       // Garden starter upgrade: Pepper Shooters already planted.
       [[-2, -10], [2, -10], [0, -12]].slice(0, S.up.zSeed).forEach(([x, z]) => plant('pepper', cellAt({ x, z }), true));
@@ -469,7 +520,8 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         else if (st.toSpawn > 0) {
           st.spawnT -= dt;
           if (st.spawnT <= 0) { spawn(); st.spawnT = Math.max(.3, 1.7 - st.wave * .15) / (.7 + S.diff.attack * .3); }
-        } else if (!zombies.some(z => !z.pop)) { st.breakT = 6; banner(`Wave ${st.wave} cleared! Plant more defenders!`); sfx.milestone(); }
+        } else if (!st.bossDone) { if (!zombies.some(z => !z.pop) || st.spawnT < -2.5) spawnBoss(); else st.spawnT -= dt; }
+        else if (!zombies.some(z => !z.pop)) { st.breakT = 6; banner(`Wave ${st.wave} cleared! Plant more defenders!`); sfx.milestone(); }
 
         // You: hold to keep firing at the finger (or straight ahead with the keyboard).
         st.fireT -= dt;
@@ -591,8 +643,25 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         if (z.pi < z.path.length - 1 && Math.hypot(tgt.x - p.x, tgt.z - p.z) < .5) tgt = z.path[++z.pi];
         const dx = tgt.x - p.x, dz = tgt.z - p.z, d = Math.hypot(dx, dz);
         // A defender in the way gets munched until it breaks.
-        const block = playing && defenders.find(df => df.kind !== 'banger' && Math.hypot(df.x - p.x, df.z - p.z) < .95 + z.T.scale * .2 && ((df.x - p.x) * dx + (df.z - p.z) * dz) > 0);
-        if (block) {
+        const block = playing && defenders.find(df => df.kind !== 'banger' && Math.hypot(df.x - p.x, df.z - p.z) < .95 + z.T.scale * .35 && ((df.x - p.x) * dx + (df.z - p.z) * dz) > 0);
+        if (playing && z.boss) {
+          z.abilityT -= dt;
+          if (z.type === 'oga' && z.abilityT <= 0 && p.z > -26) {
+            // Stomp: shakes the screen and smashes defenders nearby.
+            z.abilityT = 4; st.shake = .5; sfx.stomp(); confetti.burst(tmpV.copy(p).setY(.3), 20);
+            for (const df of [...defenders]) if (Math.hypot(df.x - p.x, df.z - p.z) < 3.2) { df.life -= 15; df.hp.visible = true; if (df.life <= 0) removeDefender(df); }
+          }
+          if (z.type === 'gen' && z.abilityT <= 0 && p.z > -34) {
+            // Calls in little runner zombies to help.
+            z.abilityT = 5; sfx.groan();
+            for (let k = 0; k < 2; k++) {
+              const m = makeZombie('runner'); m.g.position.set(p.x + rand(-1.5, 1.5), 0, p.z + rand(-1, 1));
+              m.path = z.path.map(v => v.clone()); m.path[m.path.length - 1].x = rand(-3.8, 3.8); m.pi = z.pi; m.side = z.side; zombies.push(m);
+            }
+          }
+          if (z.type === 'danfo' && block) { removeDefender(block); sfx.doorBang(); }
+        }
+        if (block && !(z.boss && z.type === 'danfo')) {
           z.bang = Math.max(z.bang - dt, 0);
           block.life -= 6 * z.T.scale * dt; block.hp.visible = true;
           block.fill.scale.x = Math.max(.01, block.life / block.D.hp); block.fill.position.x = -.33 * (1 - block.fill.scale.x);
@@ -606,7 +675,8 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
           // At the porch: bang on the door, which hurts the house.
           z.bang -= dt;
           if (playing && z.bang <= 0) {
-            z.bang = 1.1; st.house = Math.max(0, st.house - z.T.dmg * 1.4 * S.diff.hit); sfx.doorBang(); hud();
+            // The danfo parks out in the yard and honks the house down; everyone else bangs on the door.
+            z.bang = 1.1; st.house = Math.max(0, st.house - z.T.dmg * 1.4 * S.diff.hit); (z.type === 'danfo' ? sfx.danfo : sfx.doorBang)(); hud();
             if (st.house <= 0) { banner('Oh no! The zombies got in!'); endGame(); }
             else if (st.house < 30 && !st.warned) { st.warned = true; banner('The door is breaking! Pop them fast!'); }
           }
@@ -617,6 +687,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         z.arms.forEach((a, k) => { a.rotation.set(-1.45 + Math.sin(z.ph * .5 + k) * .15 - (z.bang > .8 ? .6 : 0), 0, (k ? .1 : -.1)); });
         z.torso.rotation.z = Math.sin(z.ph * .5) * .12; z.head.rotation.z = Math.sin(z.ph * .7) * .2;
         z.inner.position.y = z.bike ? 0 : Math.abs(sw) * .06;
+        if (z.bike) z.bike.rotation.y = z.inner.rotation.y;
         if (z.hit > 0) { z.hit -= dt; z.inner.scale.set(1.15, .88, 1.15); } else z.inner.scale.set(1, 1, 1);
         z.hp.quaternion.copy(camera.quaternion);
         // Now and then a zombie calls out for Pearl.
@@ -635,6 +706,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         }
         if (L !== st.warnL || R !== st.warnR) { st.warnL = L; st.warnR = R; hud(); }
       }
+      if (st.shake > 0) st.shake = Math.max(0, st.shake - dt);
       if (st.recoil > 0) st.recoil = Math.max(0, st.recoil - dt * 6);
       view.position.z = st.recoil * .08; view.rotation.x = st.recoil * .15;
       view.visible = playing;
@@ -647,6 +719,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
       eyeOf(st.who, eyePos);
       fpsQ.setFromEuler(new THREE.Euler(st.pitch, st.yaw, 0, 'YXZ'));
       cam.position.lerpVectors(menuPos, eyePos, e);
+      if (st.shake > 0) cam.position.add(tmpV.set(rand(-1, 1), rand(-1, 1), 0).multiplyScalar(st.shake * .25));
       cam.quaternion.slerpQuaternions(menuQ, fpsQ, e);
     },
     fireHit() { return false; },

@@ -2,7 +2,7 @@
 // Game files: serve from cache straight away, refresh the cache in the background,
 // so the game opens instantly offline and picks up updates on the next launch.
 // Bump VERSION when the list of files below changes.
-const VERSION = 'pw-v14';
+const VERSION = 'pw-v15';
 const SHELL = [
   './',
   'index.html',

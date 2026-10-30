@@ -74,6 +74,10 @@ function hud() {
       bar.appendChild(b);
     }
     for (const b of bar.children) { const D = game.DEFS[b.dataset.k]; b.classList.toggle('poor', game.cash < D.cost); b.setAttribute('aria-pressed', String(game.placing === b.dataset.k)); }
+    const boss = game.bossInfo;
+    $('bossBar').hidden = !boss || S.mode !== 'play';
+    if (boss) { $('bossName').textContent = boss.name; $('bossFill').style.width = `${boss.frac * 100}%`; }
+    $('banner').style.top = boss && S.mode === 'play' ? 'calc(max(10px, env(safe-area-inset-top, 0px)) + 128px)' : '';
     const [wl, wr] = game.warn;
     $('warnL').hidden = !(wl && S.mode === 'play'); $('warnR').hidden = !(wr && S.mode === 'play');
     $('warnL').textContent = `⚠️ ${wl}`; $('warnR').textContent = `${wr} ⚠️`;
@@ -84,7 +88,7 @@ function hud() {
   $('seedBar').hidden = !z || S.mode !== 'play';
   // Keep the hint above the seed bar in Zombie Defence.
   $('hint').style.bottom = z ? 'calc(156px + env(safe-area-inset-bottom, 0px))' : '';
-  if (!z) { $('warnL').hidden = true; $('warnR').hidden = true; }
+  if (!z) { $('warnL').hidden = true; $('warnR').hidden = true; $('bossBar').hidden = true; $('banner').style.top = ''; }
   $('fireBtn').hidden = S.mode !== 'play' || S.ammo <= 0 || !!game.noFireButton;
   $('ammo').textContent = S.ammo;
   $('shieldBadge').hidden = !(S.shieldT > 0 && S.mode === 'play');
