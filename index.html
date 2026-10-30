@@ -143,12 +143,10 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
       <p class="eyebrow">Made by Daddy, for Pearl</p>
       <h1>Pearl's World</h1>
       <div class="row">
-        <label class="btn" for="photo" tabindex="0">Add Pearl's photo</label>
-        <input id="photo" type="file" accept="image/*" hidden>
         <button class="btn alt" id="lookBtn">Pearl's look</button>
+        <button class="btn alt" id="mumBtn">Mummy's look</button>
         <button class="btn alt" id="dadBtn">Daddy's look</button>
         <button class="btn go" id="shopBtn">🛍️ Shop</button>
-        <button id="clearPhoto" class="link" hidden>Use cartoon Pearl</button>
       </div>
       <div class="modes">
         <button class="mode run" id="playRun">
@@ -195,6 +193,24 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
     </div>
   </section>
 
+  <section id="mumPanel" class="overlay" hidden>
+    <div class="panel look">
+      <h2>Mummy's look</h2>
+      <div class="row">
+        <label class="btn" for="mumPhoto" tabindex="0">Add Mummy's photo</label>
+        <input id="mumPhoto" type="file" accept="image/*" hidden>
+        <button id="clearMumPhoto" class="link" hidden>Use cartoon Mummy</button>
+      </div>
+      <div class="lrow"><h3>Skin</h3><div class="chips" id="mumSkin"></div></div>
+      <div class="lrow"><h3>Hair</h3><div class="chips" id="mumHair"></div></div>
+      <div class="lrow"><h3>Gele</h3><div class="chips" id="mumGele"></div></div>
+      <div class="lrow"><h3>Outfit</h3><div class="chips" id="mumOutfit"></div></div>
+      <div class="lrow"><h3>Earrings</h3><div class="chips" id="mumEarrings"></div></div>
+      <div class="lrow"><h3>Glasses</h3><div class="chips" id="mumGlasses"></div></div>
+      <div class="row"><button class="btn big go" id="mumDone">Done</button></div>
+    </div>
+  </section>
+
   <section id="dadPanel" class="overlay" hidden>
     <div class="panel look">
       <h2>Daddy's look</h2>
@@ -216,7 +232,7 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
   <section id="lookPanel" class="overlay" hidden>
     <div class="panel look">
       <h2>Pearl's look</h2>
-      <p class="small">Adding her photo matches her skin tone automatically.</p>
+      <button id="clearPhoto" class="link" hidden>Remove her photo (use cartoon Pearl)</button>
       <div class="lrow"><h3>Skin</h3><div class="chips" id="lookSkin"></div></div>
       <div class="lrow"><h3>Hair</h3><div class="chips" id="lookHair"></div></div>
       <div class="lrow"><h3>Hair colour</h3><div class="chips" id="lookHairColor"></div></div>

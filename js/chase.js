@@ -1,5 +1,5 @@
 // Shared by both games: Mummy chasing Pearl, power-ups, fireballs and the shield bubble.
-import { THREE, M, G, mesh, rand, damp, makePearl, posePearl, setMermaid, getOutfit } from './common.js';
+import { THREE, M, G, mesh, rand, damp, makePearl, posePearl, setMermaid, getOutfit, applyPhoto, LOOKS } from './common.js';
 import { sfx } from './audio.js';
 
 // The chase gap: how far ahead of Mummy Pearl is. 0 means caught.
@@ -15,19 +15,69 @@ export const DIFFICULTY = {
 };
 
 /* ---------- Mummy ---------- */
-const mumDress = new THREE.MeshLambertMaterial({ map: getOutfit('purple') });
-const mumGele = new THREE.MeshLambertMaterial({ map: getOutfit('sun') });
+// Her look is set in "Mummy's look" (`pw_mum_look`); her photo is kept on the phone (`pw_mum_face`).
+export const MUM_LOOKS = {
+  hair: [['gele', 'Gele'], ['braids', 'Braids'], ['bun', 'Bun'], ['puff', 'Afro puff'], ['curls', 'Short curls']],
+  earrings: [['hoops', 'Gold hoops'], ['studs', 'Studs'], ['none', 'None']],
+  glasses: [['none', 'No glasses'], ['on', 'Glasses']],
+};
+export const DEFAULT_MUM = { skin: '#8a5a3c', hair: 'gele', gele: 'sun', outfit: 'purple', earrings: 'hoops', glasses: 'none' };
+const MM = {
+  skin: new THREE.MeshLambertMaterial({ color: 0x8a5a3c }),
+  hair: new THREE.MeshLambertMaterial({ color: 0x1c1410 }),
+  dress: new THREE.MeshLambertMaterial({ map: getOutfit('purple') }),
+  gele: new THREE.MeshLambertMaterial({ map: getOutfit('sun') }),
+  frame: new THREE.MeshBasicMaterial({ color: 0x1a1020 }),
+};
+const mumFigures = [];
+let lastMum = null;
+export function applyMumLook(look, list = mumFigures) {
+  const L = { ...DEFAULT_MUM, ...look }; lastMum = L;
+  MM.skin.color.set(L.skin);
+  MM.dress.map = getOutfit(L.outfit); MM.dress.needsUpdate = true;
+  MM.gele.map = getOutfit(L.gele); MM.gele.needsUpdate = true;
+  for (const F of list) {
+    for (const [k, g] of Object.entries(F.hairs)) g.visible = k === L.hair;
+    const x = F.mumExtra;
+    F.cap.visible = L.hair !== 'gele';
+    x.braids.visible = L.hair === 'braids'; x.bun.visible = L.hair === 'bun';
+    x.hoops.visible = L.earrings === 'hoops';
+    x.studs.forEach(m => { m.visible = L.earrings === 'studs'; });
+    x.glasses.visible = L.glasses === 'on';
+  }
+}
+export function setMumPhoto(url, onSkin) { mumFigures.forEach((F, i) => applyPhoto(F, url, i ? null : onSkin)); }
 
 // Mummy: a taller version of Pearl in a long ankara dress and gele.
 export function makeMum(parent, { mermaid = false, lines, closeLines, onSay }) {
   const F = makePearl();
   F.root.scale.setScalar(1.3);
+  const studs = [];
   F.root.traverse(o => {
-    if (o.material === M.dress) o.material = mumDress;
-    if (o.material === M.gele) o.material = mumGele;
+    if (o.material === M.skin) o.material = MM.skin;
+    else if (o.material === M.hair) o.material = MM.hair;
+    else if (o.material === M.dress || o.material === M.lace) o.material = MM.dress;
+    else if (o.material === M.gele) o.material = MM.gele;
+    else if (o.material === M.gold) studs.push(o);
   });
-  for (const [k, g] of Object.entries(F.hairs)) g.visible = k === 'gele';
-  F.cap.visible = false; F.bow.visible = false; F.headband.visible = false;
+  F.bow.visible = false; F.headband.visible = false;
+  // Extra hairstyles, earrings and glasses for Mummy.
+  const mx = { studs };
+  mx.braids = new THREE.Group();
+  for (let i = 0; i < 15; i++) {
+    const a = -1.9 + i / 14 * 3.8, b = mesh(G.cyl, MM.hair, .03, .75, .03);
+    b.position.set(Math.sin(a) * .35, -.22, -Math.cos(a) * .35); b.rotation.x = Math.cos(a) * .12; mx.braids.add(b);
+  }
+  mx.bun = new THREE.Group(); const bun = mesh(G.sphere, MM.hair, .19); bun.position.set(0, .3, -.24); mx.bun.add(bun);
+  mx.hoops = new THREE.Group();
+  for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.TorusGeometry(.055, .012, 6, 18), M.gold); h.position.set(sx * .37, -.14, .02); h.rotation.y = Math.PI / 2; mx.hoops.add(h); }
+  mx.glasses = new THREE.Group();
+  for (const sx of [-1, 1]) { const r = new THREE.Mesh(new THREE.TorusGeometry(.08, .012, 6, 20), MM.frame); r.position.set(sx * .13, .03, .36); mx.glasses.add(r); }
+  const br = mesh(G.box, MM.frame, .1, .015, .015); br.position.set(0, .05, .37); mx.glasses.add(br);
+  F.head.add(mx.braids, mx.bun, mx.hoops, mx.glasses);
+  F.mumExtra = mx;
+  mumFigures.push(F);
+  applyMumLook(lastMum || DEFAULT_MUM, [F]);
   F.legs.forEach(l => { l.userData.sock.visible = false; });
   // A long iro-style dress down to her ankles.
   F.dress.scale.set(1.05, 1.9, 1.05); F.dress.position.y = .02;
