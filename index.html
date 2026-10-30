@@ -56,7 +56,24 @@ p{margin:0}
 .install{align-self:flex-start}
 #hud{position:absolute;top:max(10px,env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
 .stats{display:flex;flex-direction:column;gap:4px;font:400 22px/1 var(--display);color:var(--pearl);text-shadow:2px 2px 0 var(--ink);font-variant-numeric:tabular-nums}
-#hearts{color:var(--blush);letter-spacing:2px}
+.chase{width:min(34vw,150px);padding-top:4px;padding-right:14px}
+.chase .track{position:relative;display:block;height:14px;border-radius:999px;background:linear-gradient(90deg,var(--blush),var(--sun) 55%,#7fe3a0);border:3px solid var(--ink);box-shadow:0 2px 0 var(--ink)}
+.chase .mark,.chase .pearlMark{position:absolute;top:50%;transform:translate(-50%,-50%);font-size:24px;line-height:1;text-shadow:none;transition:left .25s linear}
+.chase{position:relative}
+.chase .pearlMark{left:100%}
+.say{position:absolute;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(150px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 130px);background:var(--pearl);color:var(--ink);border:3px solid var(--ink);border-radius:16px;padding:7px 12px;font:400 17px/1.15 var(--display);pointer-events:none;transition:opacity .25s,transform .25s;box-shadow:0 3px 0 var(--ink)}
+.say::after{content:"";position:absolute;left:22px;bottom:-12px;border:7px solid transparent;border-top:7px solid var(--ink)}
+.say.off{transform:translateY(6px)}
+.say.off{opacity:0}
+.chase.close .track{animation:throb .5s ease-in-out infinite alternate}
+@keyframes throb{to{transform:scale(1.06)}}
+.badges{display:flex;gap:6px;font:800 13px var(--body);text-shadow:none}
+.badge{background:var(--pearl);color:var(--ink);border:2px solid var(--ink);border-radius:999px;padding:3px 8px}
+.fire{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(76px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;border:4px solid var(--ink);background:radial-gradient(circle at 40% 35%,#ffe066,#ff7a1a 60%,#e8331a);box-shadow:0 5px 0 var(--ink);font-size:38px;cursor:pointer;touch-action:none;display:grid;place-items:center;padding:0}
+.fire b{position:absolute;right:-6px;top:-6px;min-width:28px;height:28px;border-radius:999px;background:var(--pearl);border:3px solid var(--ink);font:800 15px/22px var(--body);color:var(--ink)}
+.fire:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
+#ink{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .5s;background:radial-gradient(circle at 30% 40%,rgba(42,22,64,.85) 0 12%,transparent 13%),radial-gradient(circle at 62% 55%,rgba(42,22,64,.8) 0 16%,transparent 17%),radial-gradient(circle at 48% 30%,rgba(42,22,64,.75) 0 8%,transparent 9%),radial-gradient(circle at 70% 25%,rgba(42,22,64,.7) 0 6%,transparent 7%)}
+#ink.on{opacity:1;transition:opacity .08s}
 .ibs{display:flex;gap:8px;pointer-events:auto}
 .ib{width:44px;height:44px;border-radius:50%;border:3px solid var(--ink);background:var(--pearl);color:var(--ink);font:800 18px var(--body);cursor:pointer;display:grid;place-items:center;padding:0}
 .ib[aria-pressed=false]{opacity:.45;text-decoration:line-through}
@@ -70,7 +87,7 @@ p{margin:0}
 .sw.photo{font:800 11px var(--body);color:var(--pearl);width:auto;border-radius:999px;padding:0 10px;height:32px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
 .chip{font:800 13px var(--body);border:3px solid var(--ink);border-radius:999px;padding:6px 10px;background:var(--pearl);color:var(--ink);cursor:pointer}
 .chip[aria-pressed=true]{background:var(--sun)}
-#banner{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top,0px)) + 70px);transform:translateX(-50%);background:var(--pearl);border:3px solid var(--ink);border-radius:999px;padding:10px 20px;font:400 clamp(18px,5.5vw,26px)/1.1 var(--display);color:var(--coral);white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;pointer-events:none;transition:opacity .3s,transform .3s;box-sizing:border-box}
+#banner{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top,0px)) + 104px);transform:translateX(-50%);background:var(--pearl);border:3px solid var(--ink);border-radius:999px;padding:10px 20px;font:400 clamp(18px,5.5vw,26px)/1.1 var(--display);color:var(--coral);white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;pointer-events:none;transition:opacity .3s,transform .3s;box-sizing:border-box}
 #banner.off{opacity:0;transform:translateX(-50%) translateY(-10px)}
 #hint{position:absolute;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:rgba(36,22,61,.75);color:var(--pearl);border-radius:999px;padding:8px 16px;font:800 14px var(--body);white-space:nowrap;pointer-events:none;transition:opacity .6s}
 #hint.off{opacity:0}
@@ -79,20 +96,28 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
   .overlay{background:linear-gradient(90deg,rgba(36,22,61,0) 40%,rgba(36,22,61,.35));padding-bottom:16px}
   .panel{margin:auto 0 auto auto;max-width:430px}
 }
-@media (prefers-reduced-motion:reduce){#banner,#hint,.mode{transition:none}}
+@media (prefers-reduced-motion:reduce){#banner,#hint,.mode,.chase .mark{transition:none}.chase.close .track{animation:none}}
 </style>
 
 <div id="app">
   <canvas id="c" aria-label="Pearl's World game area"></canvas>
 
   <div id="hud" hidden>
-    <div class="stats"><span id="hearts" aria-label="Hearts">♥♥♥</span><span id="score">0 pearls</span></div>
+    <div class="stats">
+      <div id="chase" class="chase" role="img" aria-label="Mummy is far behind"><span class="track"><span id="mumMark" class="mark" aria-hidden="true">👩🏾</span><span class="pearlMark" aria-hidden="true">👶🏾</span></span></div>
+      <span id="score">0 pearls</span>
+      <span class="badges"><span id="shieldBadge" class="badge" hidden>🛡️ Shield</span><span id="magnetBadge" class="badge" hidden>🧲 Magnet</span></span>
+    </div>
     <div class="ibs">
+      <button id="pauseBtn" class="ib" aria-label="Pause"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1.5" fill="currentColor"/><rect x="14" y="4" width="5" height="16" rx="1.5" fill="currentColor"/></svg></button>
       <button id="musicBtn" class="ib" aria-label="Music" aria-pressed="true">♫</button>
       <button id="soundBtn" class="ib" aria-label="Sound effects" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
       <button id="homeBtn" class="ib" aria-label="Back to menu">✕</button>
     </div>
   </div>
+  <div id="ink" aria-hidden="true"></div>
+  <div id="mumSay" class="say off" role="status" aria-live="polite"></div>
+  <button id="fireBtn" class="fire" hidden aria-label="Throw a fireball">🔥<b id="ammo">0</b></button>
   <div id="banner" class="off" role="status" aria-live="polite"></div>
   <div id="hint" class="off"></div>
 
@@ -133,6 +158,18 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
       <div class="lrow"><h3>Outfit</h3><div class="chips" id="lookOutfit"></div></div>
       <div class="lrow"><h3>Socks</h3><div class="chips" id="lookSocks"></div></div>
       <div class="row"><button class="btn big go" id="lookDone">Done</button></div>
+    </div>
+  </section>
+
+  <section id="pausePanel" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Taking a break</p>
+      <h2>Paused</h2>
+      <div class="row">
+        <button class="btn big go" id="resumeBtn">Resume</button>
+        <button class="btn big alt" id="restartBtn">Restart</button>
+        <button class="btn big alt" id="quitBtn">Menu</button>
+      </div>
     </div>
   </section>
 

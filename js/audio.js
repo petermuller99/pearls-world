@@ -29,7 +29,11 @@ function ensure() {
 export function unlock() { if (ensure() && ac.state === 'suspended') ac.resume(); }
 export function setSfx(on) { audio.sfxOn = on; store.set('pw_mute', !on); if (ac) sfxBus.gain.setTargetAtTime(on ? .9 : 0, ac.currentTime, .05); }
 export function setMusic(on) { audio.musicOn = on; store.set('pw_music_off', !on); if (ac) musicBus.gain.setTargetAtTime(on ? .55 : 0, ac.currentTime, .1); }
-document.addEventListener('visibilitychange', () => { if (!ac) return; if (document.hidden) ac.suspend(); else ac.resume(); });
+// Pausing freezes the audio clock, which stops the music exactly where it was.
+let paused = false;
+export function pauseAudio() { paused = true; if (ac) ac.suspend(); }
+export function resumeAudio() { paused = false; if (ac) ac.resume(); }
+document.addEventListener('visibilitychange', () => { if (!ac) return; if (document.hidden) ac.suspend(); else if (!paused) ac.resume(); });
 
 /* ---------- instruments ---------- */
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -136,7 +140,7 @@ export function stopMusic(now) {
 export function setMusicLevel(lv) { level = lv; }
 
 /* ---------- sound effects ---------- */
-function fx(fn) { return (...a) => { if (!audio.sfxOn || !ensure() || document.hidden) return; fn(ac.currentTime, ...a); }; }
+function fx(fn) { return (...a) => { if (!audio.sfxOn || !ensure() || document.hidden || paused) return; fn(ac.currentTime, ...a); }; }
 let streak = 0, streakT = 0;
 export const sfx = {
   click: fx(t => { osc('sine', 880, t, .06, .12, sfxBus); }),
@@ -164,5 +168,19 @@ export const sfx = {
   bubble: fx(t => { osc('sine', 400 + Math.random() * 400, t, .07, .06, sfxBus, { to: 1100, slide: .05 }); }),
   oyster: fx(t => { osc('triangle', 180, t, .18, .12, sfxBus, { to: 260 }); [1319, 1568, 2093].forEach((f, i) => osc('sine', f, t + .12 + i * .07, .2, .1, sfxBus)); }),
   jelly: fx(t => { osc('sine', 500, t, .3, .22, sfxBus, { to: 160, slide: .25 }); osc('sine', 700, t + .05, .2, .08, sfxBus, { to: 300 }); }),
+  // Mummy calling: a little two-note "Pe-arl!".
+  mum: fx(t => { osc('triangle', 523, t, .14, .1, sfxBus, { to: 600, slide: .1 }); osc('triangle', 440, t + .16, .22, .1, sfxBus, { to: 392 }); }),
+  caught: fx(t => { [392, 494, 587, 784].forEach((f, i) => osc('sine', f, t + i * .12, .4, .12, sfxBus)); osc('sine', 196, t, .9, .1, sfxBus); }),
+  power: fx(t => { [784, 988, 1175, 1568].forEach((f, i) => osc('sine', f, t + i * .05, .12, .1, sfxBus)); noise(t, .3, .05, sfxBus, 'highpass', 6000); }),
+  fire: fx(t => { noise(t, .35, .28, sfxBus, 'bandpass', 700, .7); osc('sawtooth', 160, t, .25, .06, sfxBus, { to: 420, slide: .2, lp: 1200 }); }),
+  poof: fx(t => { noise(t, .25, .3, sfxBus, 'lowpass', 2500); [660, 880].forEach((f, i) => osc('square', f, t + .05 + i * .07, .08, .05, sfxBus, { lp: 2500 })); }),
+  shieldPop: fx(t => { osc('sine', 900, t, .2, .16, sfxBus, { to: 300 }); noise(t, .12, .15, sfxBus, 'highpass', 3000); }),
+  goat: fx(t => { const s = ac.createOscillator(), v = ac.createOscillator(), vg = ac.createGain(), g = ac.createGain(), f = ac.createBiquadFilter();
+    s.type = 'sawtooth'; s.frequency.value = 330; v.frequency.value = 22; vg.gain.value = 30; v.connect(vg); vg.connect(s.frequency);
+    f.type = 'bandpass'; f.frequency.value = 1200; f.Q.value = 2; env(g, t, .02, .14, .45); s.connect(f); f.connect(g); g.connect(sfxBus);
+    s.start(t); v.start(t); s.stop(t + .55); v.stop(t + .55); }),
+  crow: fx(t => { for (const d of [0, .22]) { noise(t + d, .14, .2, sfxBus, 'bandpass', 1300, 3); osc('square', 420, t + d, .12, .04, sfxBus, { to: 300, lp: 1500 }); } }),
+  puffer: fx(t => { osc('sine', 200, t, .25, .16, sfxBus, { to: 520, slide: .2 }); }),
+  ink: fx(t => { noise(t, .2, .2, sfxBus, 'lowpass', 800); osc('sine', 300, t, .15, .1, sfxBus, { to: 120 }); }),
   fish: fx(t => { osc('sine', 1200, t, .06, .08, sfxBus, { to: 1700 }); osc('sine', 1500, t + .08, .08, .08, sfxBus, { to: 2100 }); }),
 };

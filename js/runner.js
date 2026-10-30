@@ -1,6 +1,7 @@
 // First Steps: Pearl crawls, toddles and runs toward -z along the Lekki-Ikoyi Link Bridge.
 import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, store, COL } from './common.js';
 import { sfx } from './audio.js';
+import { makeMum, makePowerItem, animatePowerItem, POWERS } from './chase.js';
 
 const LANES = [-1.5, 0, 1.5];
 const MILESTONES = [
@@ -13,7 +14,7 @@ const STAGE_SPEED = [5, 7, 9.5];
 const LEVEL_EVERY = 200, MAX_LEVEL = 12, MAX_SPEED = 17;
 const DECK_W = 13, SEG = 20, PYLON_GAP = 110;
 
-export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp }) {
+export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, mumSay, levelUp, powers }) {
   const world = new THREE.Group(); world.visible = false; scene.add(world);
   const sky = gradientTex([[0, '#ff8f6b'], [.55, '#ffc58a'], [1, '#ffe3b0']]);
   const fog = new THREE.Fog(0xffd9a8, 40, 170);
@@ -77,6 +78,11 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
     palmLeaf: new THREE.MeshLambertMaterial({ color: 0x2f9e6a, side: THREE.DoubleSide }),
     trunk: new THREE.MeshLambertMaterial({ color: 0x7a4a2c }),
     sand: new THREE.MeshLambertMaterial({ color: 0xf2c79a }),
+    goat: new THREE.MeshLambertMaterial({ color: 0xf3ecdc }),
+    goatPatch: new THREE.MeshLambertMaterial({ color: 0x8a5a3a }),
+    horn: new THREE.MeshLambertMaterial({ color: 0xc9b48a }),
+    crow: new THREE.MeshLambertMaterial({ color: 0x2a2433 }),
+    beak: new THREE.MeshLambertMaterial({ color: 0xffb020 }),
   };
 
   /* ---------- lights ---------- */
@@ -171,6 +177,46 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
   ];
   vehicles.forEach((o, i) => { o.m.position.set(o.x, 0, -20 - i * 25); o.m.rotation.y = Math.PI; });
 
+  /* ---------- the cheeky attackers ---------- */
+  // Goats wander Lagos streets; these ones charge straight down Pearl's lane.
+  function makeGoat() {
+    const g = new THREE.Group();
+    const body = mesh(G.sphere, R.goat, .3, .25, .44); body.position.y = .62; g.add(body);
+    const patch = mesh(G.sphere, R.goatPatch, .2, .17, .24); patch.position.set(.13, .7, -.08); g.add(patch);
+    const head = new THREE.Group(); head.position.set(0, .86, .42); g.add(head);
+    head.add(mesh(G.sphere, R.goat, .16, .16, .21));
+    const snout = mesh(G.sphere, R.goatPatch, .09, .08, .09); snout.position.set(0, -.06, .17); head.add(snout);
+    for (const sx of [-1, 1]) {
+      const eye = mesh(G.sphere, M.eye, .032); eye.position.set(sx * .085, .05, .15); head.add(eye);
+      const brow = mesh(G.box, M.eye, .07, .014, .01); brow.position.set(sx * .085, .1, .16); brow.rotation.z = sx * -.45; head.add(brow);
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(.035, .18, 6), R.horn); horn.position.set(sx * .07, .17, -.03); horn.rotation.x = -.6; head.add(horn);
+      const ear = mesh(G.sphere, R.goat, .09, .035, .05); ear.position.set(sx * .17, .05, -.02); ear.rotation.z = sx * -.4; head.add(ear);
+    }
+    const beard = new THREE.Mesh(new THREE.ConeGeometry(.04, .12, 5), R.goat); beard.position.set(0, -.15, .12); beard.rotation.x = Math.PI; head.add(beard);
+    const legs = [];
+    for (const [lx, lz] of [[-.14, .25], [.14, .25], [-.14, -.25], [.14, -.25]]) {
+      const l = new THREE.Group(); l.position.set(lx, .48, lz); const m = mesh(G.box, R.goatPatch, .07, .44, .07); m.position.y = -.22; l.add(m); g.add(l); legs.push(l);
+    }
+    g.userData.legs = legs;
+    return g;
+  }
+  // Crows swoop down into her lane from above.
+  function makeCrow() {
+    const g = new THREE.Group();
+    g.add(mesh(G.sphere, R.crow, .18, .16, .3));
+    const head = mesh(G.sphere, R.crow, .13); head.position.set(0, .1, .26); g.add(head);
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(.05, .16, 6), R.beak); beak.rotation.x = Math.PI / 2; beak.position.set(0, .08, .42); g.add(beak);
+    for (const sx of [-1, 1]) {
+      const w = mesh(G.sphere, M.white, .035); w.position.set(sx * .07, .15, .35); g.add(w);
+      const e = mesh(G.sphere, M.eye, .018); e.position.set(sx * .07, .15, .38); g.add(e);
+      const brow = mesh(G.box, M.eye, .06, .014, .01); brow.position.set(sx * .07, .2, .37); brow.rotation.z = sx * -.5; g.add(brow);
+    }
+    const wings = [-1, 1].map(sx => { const p = new THREE.Group(); p.position.set(sx * .12, .06, 0); const w = mesh(G.sphere, R.crow, .3, .03, .16); w.position.x = sx * .26; p.add(w); g.add(p); return p; });
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(.1, .22, 4), R.crow); tail.rotation.x = -Math.PI / 2; tail.position.z = -.32; tail.scale.y = .4; g.add(tail);
+    g.userData.wings = wings;
+    return g;
+  }
+
   /* ---------- obstacles and pickups ---------- */
   const items = [];
   function addItem(kind, lane, z, y = 0) {
@@ -183,6 +229,12 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
       m = mesh(G.sphere, R.ball, .38); m.position.y = .38;
     } else if (kind === 'pearl') {
       m = mesh(G.sphere, M.pearl, .17); m.position.y = .55 + y;
+    } else if (kind === 'goat') {
+      m = makeGoat();
+    } else if (kind === 'crow') {
+      m = makeCrow(); m.position.y = 2.6;
+    } else if (POWERS.includes(kind)) {
+      m = makePowerItem(kind); m.position.y = .75;
     } else {
       m = new THREE.Group();
       const b = mesh(G.cyl, R.bottle, .14, .42, .14); b.position.y = .21; m.add(b);
@@ -193,7 +245,7 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
     }
     const holder = new THREE.Group(); holder.add(m);
     holder.position.set(LANES[lane], 0, z);
-    if (kind === 'block' || kind === 'ball') { const sh = mesh(G.shadow, M.shadow, kind === 'ball' ? .38 : .5); sh.position.y = .015; holder.add(sh); }
+    if (kind === 'block' || kind === 'ball' || kind === 'goat' || kind === 'crow') { const sh = mesh(G.shadow, M.shadow, kind === 'ball' ? .38 : .5); sh.position.y = .015; holder.add(sh); }
     world.add(holder);
     const it = { kind, lane, z, m, holder, baseY: m.position.y, gone: false, fly: 0, vz: 0 };
     items.push(it); return it;
@@ -222,20 +274,40 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
     } else {
       for (let k = 0; k < 5; k++) addItem('pearl', pl, z - k * 1.4);
     }
-    if (S.hearts < 3 && Math.random() < .12) addItem('bottle', 3 - obstLane - pl, z - 3);
+    const free = 3 - obstLane - pl;
+    if (S.gap < 7 && Math.random() < .12) addItem('bottle', free, z - 3);
+    // Attackers: goats from the start, crows from level 2, more of both as levels rise.
+    if (Math.random() < Math.min(.4, .1 + lv * .03)) { const g = addItem('goat', Math.random() < .5 ? obstLane : free, z - 16); g.vz = rand(3.5, 5) + lv * .25; }
+    if (lv >= 2 && Math.random() < Math.min(.3, (lv - 1) * .05)) addItem('crow', pl, z - 12).vz = rand(2, 3);
+    // Power-ups. The first few rows always offer fireballs so Pearl learns to throw them.
+    st.rows++;
+    if (st.rows === 4) addItem('fire', pl, z - 7);
+    else if (Math.random() < .11) addItem(POWERS[Math.floor(Math.random() * POWERS.length)], pl, z - 7);
   }
 
   /* ---------- state ---------- */
-  const R0 = { level: 1, hornT: 0, z: 0, speed: 0, stage: 0, lane: 1, x: 0, y: 0, vy: 0, jumps: 0, ph: 0, ms: 0, nextSpawn: 0, wave: 0, turn: 0, waveT: 0, startZ: 0, dist: 0 };
+  const R0 = { rows: 0, level: 1, hornT: 0, z: 0, speed: 0, stage: 0, lane: 1, x: 0, y: 0, vy: 0, jumps: 0, ph: 0, ms: 0, nextSpawn: 0, wave: 0, turn: 0, waveT: 0, startZ: 0, dist: 0 };
   const st = { ...R0 };
   let touch = null;
   const tmpV = new THREE.Vector3();
+  const mum = makeMum(world, {
+    onSay: mumSay,
+    lines: ['Pearl, come back!', 'Careful o!', 'Wait for Mummy!', 'Slow down, my baby!', 'Pearl! Ah ah!'],
+    closeLines: ['Almost got you!', 'Come here, you!', 'I see you o!'],
+  });
+  const ENEMY = { goat: 1, crow: 1 }, SOLID = { block: 1, ball: 1, goat: 1, crow: 1 };
+  function knockOut(it) {
+    it.gone = true; it.fly = 1;
+    confetti.burst(tmpV.set(LANES[it.lane], it.kind === 'crow' ? it.m.position.y : .6, it.z), 16);
+    if (ENEMY[it.kind]) { S.pearls += 2; banner(it.kind === 'goat' ? 'Bye bye, goat! +2' : 'Shoo, crow! +2'); hud(); }
+  }
 
   function moveLane(d) { const n = THREE.MathUtils.clamp(st.lane + d, 0, 2); if (n !== st.lane) { st.lane = n; sfx.swish(); } }
   function jump() { if (st.jumps < 2) { st.vy = st.jumps ? 6.2 : 7.2; (st.jumps ? sfx.doubleJump : sfx.jump)(); st.jumps++; } }
 
   return {
     id: 'run',
+    items,
     startBanner: 'Crawl, Pearl, crawl!',
     hint: 'Swipe to change lanes. Tap to jump.',
     world, st,
@@ -246,12 +318,18 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
     exit() { world.visible = false; clearItems(); },
     start() {
       clearItems();
-      Object.assign(st, { speed: STAGE_SPEED[0], stage: 0, lane: 1, y: 0, vy: 0, jumps: 0, ms: 0, nextSpawn: st.z - 24, wave: 0, turn: 0, waveT: 0, startZ: st.z, dist: 0, level: 1, hornT: 0 });
+      Object.assign(st, { speed: STAGE_SPEED[0], stage: 0, lane: 1, y: 0, vy: 0, jumps: 0, ms: 0, nextSpawn: st.z - 24, wave: 0, turn: 0, waveT: 0, startZ: st.z, dist: 0, level: 1, hornT: 0, rows: 0 });
+      mum.reset(st.x, 0, st.z);
     },
     scoreText() { return `${S.pearls} pearls · ${Math.floor(st.dist)} m · Level ${st.level || 1}`; },
     finish(bank) {
       const m = Math.floor(st.dist), best = store.get('pw_best', 0);
       const rec = m > best; if (rec) store.set('pw_best', m);
+      if (S.caught) return {
+        eyebrow: rec ? 'New longest walk' : 'Mummy caught you!',
+        title: 'Hug time, Pearl!',
+        text: `Pearl ran ${m} m across the bridge before Mummy caught her, and picked up ${S.pearls} pearls. Piggy bank: ${bank} pearls.`,
+      };
       return {
         eyebrow: rec ? 'New longest walk' : 'Walk complete',
         title: S.pearls >= 30 ? 'Amazing, Pearl!' : 'Well done, Pearl!',
@@ -260,7 +338,8 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
     },
     update(dt) {
       const playing = S.mode === 'play';
-      st.speed = playing ? damp(st.speed, Math.min(MAX_SPEED, STAGE_SPEED[st.stage] + st.dist * .0035), 1.5, dt) : damp(st.speed, 0, 3, dt);
+      // A bump trips her up for a moment, which lets Mummy catch up.
+      st.speed = playing ? damp(st.speed, Math.min(MAX_SPEED, STAGE_SPEED[st.stage] + st.dist * .0035) * (S.stumble > 0 ? .35 : 1), S.stumble > 0 ? 6 : 1.5, dt) : damp(st.speed, 0, 3, dt);
       st.z -= st.speed * dt;
       if (playing) {
         st.dist = st.startZ - st.z;
@@ -282,6 +361,7 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
       P.root.position.set(st.x, st.y, st.z);
       P.root.rotation.set(0, 0, (LANES[st.lane] - st.x) * -.12);
       P.shadow.position.y = .015 - st.y; P.shadow.scale.setScalar(Math.max(.15, .38 - st.y * .12));
+      mum.update(dt, { px: st.x, py: 0, pz: st.z, gap: S.gap, mode: S.mode, caught: S.caught, t: S.t, speed: st.speed });
 
       if (playing) {
         const next = MILESTONES[st.ms];
@@ -290,7 +370,7 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
           if (next.stage != null) st.stage = next.stage;
           st.waveT = 1.8;
           // Clear the way while she turns round to wave at Daddy.
-          for (const it of items) if (!it.gone && (it.kind === 'block' || it.kind === 'ball') && it.z < st.z && it.z > st.z - st.speed * 3) { it.gone = true; it.fly = 1; }
+          for (const it of items) if (!it.gone && SOLID[it.kind] && it.z < st.z && it.z > st.z - st.speed * 3 - 6) { it.gone = true; it.fly = 1; }
         }
         while (st.nextSpawn > st.z - 70) { spawnRow(st.nextSpawn); st.nextSpawn -= Math.max(6, rand(9, 14) - st.level * .5) + st.speed * .35; }
       }
@@ -299,7 +379,23 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
         const it = items[i];
         if (it.kind === 'pearl') { it.m.position.y = it.baseY + Math.sin(S.t * 4 + it.z) * .06; it.m.rotation.y += dt * 2; }
         if (it.kind === 'bottle') it.m.rotation.y += dt * 2.5;
-        if (it.vz && !it.fly) { it.z += it.vz * dt; it.holder.position.z = it.z; it.m.rotation.x += it.vz * dt / .38; }
+        if (it.vz && !it.fly) {
+          it.z += it.vz * dt; it.holder.position.z = it.z;
+          if (it.kind === 'ball') it.m.rotation.x += it.vz * dt / .38;
+        }
+        if (it.kind === 'goat' && !it.fly) {
+          it.m.userData.legs.forEach((l, k) => { l.rotation.x = Math.sin(S.t * 16 + k * Math.PI / 2) * .6; });
+          it.m.position.y = Math.abs(Math.sin(S.t * 16)) * .06;
+          if (playing && !it.bleat && st.z - it.z < 16) { it.bleat = true; sfx.goat(); }
+        }
+        if (it.kind === 'crow' && !it.fly) {
+          it.m.userData.wings.forEach((w, k) => { w.rotation.z = Math.sin(S.t * 18) * .7 * (k ? -1 : 1); });
+          const d = st.z - it.z;
+          // Swoop down to Pearl's height as she gets close.
+          it.m.position.y = d < 9 ? lerp(.75, 2.6, THREE.MathUtils.clamp((d - 1) / 8, 0, 1)) : 2.6 + Math.sin(S.t * 3) * .1;
+          if (playing && !it.cawed && d < 10) { it.cawed = true; sfx.crow(); }
+        }
+        if (it.m.userData.spin) animatePowerItem(it.m, S.t, dt);
         if (it.fly > 0) {
           it.fly -= dt * 1.4; it.holder.position.y += dt * 9; it.holder.position.x += dt * (it.lane - 1 || 1) * 5;
           it.m.rotation.x += dt * 8; it.holder.scale.setScalar(Math.max(.01, it.fly));
@@ -310,18 +406,25 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
         if (!playing || it.gone) continue;
         const dz = Math.abs(it.z - st.z), dx = Math.abs(LANES[it.lane] - st.x);
         if (it.kind === 'pearl') {
-          if (dz < .6 && dx < .6 && Math.abs(it.m.position.y - (st.y + .6)) < .7) {
+          // The magnet pulls in pearls from every lane a little way ahead.
+          const pulled = S.magnetT > 0 && it.z < st.z + .5 && it.z > st.z - 7;
+          if (pulled || (dz < .6 && dx < .6 && Math.abs(it.m.position.y - (st.y + .6)) < .7)) {
             world.remove(it.holder); items.splice(i, 1);
             S.pearls++; sfx.pearl(); confetti.burst(tmpV.set(LANES[it.lane], it.m.position.y, it.z), 4); hud();
           }
         } else if (it.kind === 'bottle') {
           if (dz < .6 && dx < .6 && st.y < .8) {
             world.remove(it.holder); items.splice(i, 1);
-            S.hearts = Math.min(3, S.hearts + 1); sfx.bottle(); sfx.heart(); banner('Milk time! +1 heart'); hud();
+            sfx.bottle(); boost(2.5, 'Milk power! Run, Pearl!');
           }
-        } else if (dz < .55 && dx < .62 && st.y < (it.kind === 'block' ? .72 : .66) && S.inv <= 0) {
+        } else if (POWERS.includes(it.kind)) {
+          if (dz < .7 && dx < .7) { world.remove(it.holder); items.splice(i, 1); powers.grant(it.kind); }
+        } else if (it.kind === 'crow') {
+          if (dz < .6 && dx < .6 && Math.abs(it.m.position.y - (st.y + .7)) < .6 && S.inv <= 0) { it.gone = true; it.fly = 1; hurt('Cheeky crow! Mummy is coming', sfx.crow, 2.5); }
+        } else if (dz < .55 && dx < .62 && st.y < (it.kind === 'block' ? .72 : it.kind === 'goat' ? .85 : .66) && S.inv <= 0) {
           it.gone = true; it.fly = 1;
-          hurt(S.hearts === 2 ? 'Careful, Pearl! One heart left' : 'Oopsie! Up you get', sfx.hit);
+          if (it.kind === 'goat') hurt('Naughty goat! Mummy is catching up', sfx.goat, 3);
+          else hurt(S.gap < 4 ? 'Oopsie! Mummy is right behind you' : 'Oopsie! Up you get', sfx.hit, 2);
         }
       }
 
@@ -347,6 +450,18 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
         a.needsUpdate = true;
       }
     },
+    fire() { return powers.fire(tmpV.set(st.x, st.y + .65, st.z - .6), new THREE.Vector3(0, 0, -(st.speed + 22))); },
+    // A fireball knocks out the first toy or attacker it reaches in its lane.
+    fireHit(pos) {
+      if (st.z - pos.z > 45) return true;
+      for (const it of items) {
+        if (it.gone || !SOLID[it.kind] || Math.abs(LANES[it.lane] - pos.x) > .7 || Math.abs(it.z - pos.z) > .9) continue;
+        if (it.kind === 'crow' && Math.abs(it.m.position.y - pos.y) > 1) continue;
+        knockOut(it); return true;
+      }
+      return false;
+    },
+    bubbleY: .6,
     // e: 0 = in front of Pearl (menu, end card), 1 = chasing behind her.
     placeCamera(camera, e, wide, front, behind, look) {
       front.set(st.x - .8, 1.25, st.z - 3.4);
@@ -369,6 +484,7 @@ export function createRunner({ scene, P, confetti, S, hurt, banner, hud, levelUp
       if (k === 'ArrowLeft' || k === 'a') { e.preventDefault(); moveLane(-1); }
       if (k === 'ArrowRight' || k === 'd') { e.preventDefault(); moveLane(1); }
       if ((k === ' ' || k === 'ArrowUp' || k === 'w') && !e.repeat) { e.preventDefault(); jump(); }
+      if ((k === 'f' || k === 'Enter') && !e.repeat) { e.preventDefault(); this.fire(); }
     },
     keyUp() {},
   };

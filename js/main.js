@@ -1,7 +1,8 @@
-// Pearl's World 3D: the menu, the shared game flow (hearts, pearls, milestones banner,
-// end card, piggy bank) and the render loop. Each game lives in its own module.
+// Pearl's World 3D: the menu, the shared game flow (Mummy's chase, power-ups, pearls,
+// banner, pause, end card, piggy bank) and the render loop. Each game lives in its own module.
 import { THREE, $, store, damp, makePearl, applyPhoto, applyLook, makeConfetti, LOOKS, DEFAULT_LOOK } from './common.js';
-import { audio, sfx, unlock, setSfx, setMusic, playMusic, stopMusic, setMusicLevel } from './audio.js';
+import { audio, sfx, unlock, setSfx, setMusic, playMusic, stopMusic, setMusicLevel, pauseAudio, resumeAudio } from './audio.js';
+import { createPowers, GAP_MAX, GAP_START } from './chase.js';
 import { createRunner } from './runner.js';
 import { createHunt } from './hunt.js';
 
@@ -31,7 +32,7 @@ function resize() {
 addEventListener('resize', resize);
 
 /* ---------- shared game state ---------- */
-const S = { mode: 'menu', t: 0, hearts: 3, pearls: 0, inv: 0, cam: 0, paused: false };
+const S = { mode: 'menu', t: 0, pearls: 0, inv: 0, cam: 0, paused: false, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false };
 let bank = store.get('pw_bank', 0);
 const P = makePearl();
 scene.add(P.root);
@@ -43,13 +44,33 @@ const confetti = makeConfetti(scene);
 let bannerTimer = 0;
 function banner(t) { const b = $('banner'); b.textContent = t; b.classList.remove('off'); bannerTimer = 2.6; }
 function hud() {
-  $('hearts').textContent = '♥'.repeat(Math.max(0, S.hearts)) + '♡'.repeat(Math.max(0, 3 - S.hearts));
-  $('hearts').setAttribute('aria-label', S.hearts + ' hearts');
+  // Chase meter: Mummy's marker slides toward Pearl as the gap closes.
+  const k = Math.max(0, Math.min(1, S.gap / GAP_MAX));
+  $('mumMark').style.left = `${(1 - k) * 100}%`;
+  $('chase').classList.toggle('close', S.gap < 3);
+  $('chase').setAttribute('aria-label', `Mummy is ${S.gap < 3 ? 'very close' : S.gap < 6 ? 'catching up' : 'far behind'}`);
   $('score').textContent = game.scoreText();
+  $('fireBtn').hidden = S.mode !== 'play' || S.ammo <= 0;
+  $('ammo').textContent = S.ammo;
+  $('shieldBadge').hidden = !(S.shieldT > 0 && S.mode === 'play');
+  $('magnetBadge').hidden = !(S.magnetT > 0 && S.mode === 'play');
 }
-function hurt(msg, sound = sfx.hit) {
-  S.hearts--; S.inv = 1.4; sound(); sfx.oops(); hud();
-  if (S.hearts <= 0) endGame(); else banner(msg);
+// A bump trips Pearl up and lets Mummy gain ground. The shield bubble blocks one bump.
+function hurt(msg, sound = sfx.hit, amount = 2) {
+  if (S.shieldT > 0) { S.shieldT = 0; S.inv = .8; sfx.shieldPop(); banner('Your shield saved you!'); hud(); return; }
+  S.gap -= amount; S.inv = 1.2; S.stumble = .6; sound(); sfx.oops(); hud();
+  if (S.gap <= 0) caught(); else banner(msg);
+}
+let sayTimer = 0;
+function mumSay(text) {
+  const el = $('mumSay'); el.textContent = '👩🏾 ' + text; el.classList.remove('off');
+  clearTimeout(sayTimer); sayTimer = setTimeout(() => el.classList.add('off'), 2200);
+}
+function boost(amount, msg) { S.gap = Math.min(GAP_MAX, S.gap + amount); banner(msg); hud(); }
+function caught() {
+  S.gap = 0; S.caught = true; hud();
+  banner('Mummy caught you! Hug time!');
+  endGame();
 }
 function levelUp(lv) {
   sfx.levelUp(); setMusicLevel(lv);
@@ -57,7 +78,8 @@ function levelUp(lv) {
 }
 function updateBank() { $('bank').textContent = bank; $('best').textContent = store.get('pw_best', 0); }
 
-const ctx = { scene, P, confetti, S, hurt, banner, hud: () => hud(), camera, levelUp };
+const powers = createPowers(scene, P, S, { banner, hud: () => hud() });
+const ctx = { scene, P, confetti, S, hurt, boost, mumSay, banner, hud: () => hud(), camera, levelUp, powers };
 const games = { run: createRunner(ctx), dive: createHunt(ctx) };
 let game = games[store.get('pw_last', 'run')] || games.run;
 game.enter();
@@ -71,24 +93,26 @@ function start(id) {
   unlock(); sfx.start();
   switchTo(id);
   confetti.clear();
-  Object.assign(S, { mode: 'play', hearts: 3, pearls: 0, inv: 0 });
+  Object.assign(S, { mode: 'play', pearls: 0, inv: 0, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false });
+  powers.reset();
+  setPaused(false);
   game.start();
-  $('menu').hidden = true; $('over').hidden = true; $('hud').hidden = false;
+  $('menu').hidden = true; $('over').hidden = true; $('hud').hidden = false; $('pausePanel').hidden = true;
   hud(); banner(game.startBanner);
   playMusic(game.id);
   const hint = $('hint'); hint.textContent = game.hint; hint.classList.remove('off');
   clearTimeout(start.hintTimer); start.hintTimer = setTimeout(() => hint.classList.add('off'), 4500);
 }
 function toMenu() {
-  S.mode = 'menu'; stopMusic();
-  $('over').hidden = true; $('hud').hidden = true; $('menu').hidden = false; $('banner').classList.add('off'); $('hint').classList.add('off');
+  S.mode = 'menu'; stopMusic(); setPaused(false); hud(); $('mumSay').classList.add('off');
+  $('over').hidden = true; $('pausePanel').hidden = true; $('hud').hidden = true; $('menu').hidden = false; $('banner').classList.add('off'); $('hint').classList.add('off');
   updateBank();
 }
 function endGame() {
   if (S.mode !== 'play') return;
   S.mode = 'over';
   bank += S.pearls; store.set('pw_bank', bank);
-  stopMusic(); sfx.gameOver();
+  stopMusic(); (S.caught ? sfx.caught : sfx.gameOver)(); hud();
   const info = game.finish(bank);
   $('overEyebrow').textContent = info.eyebrow; $('overTitle').textContent = info.title; $('overText').textContent = info.text;
   setTimeout(() => { if (S.mode === 'over') { $('hud').hidden = true; $('over').hidden = false; } }, 900);
@@ -100,6 +124,19 @@ $('playDive').onclick = () => start('dive');
 $('againBtn').onclick = () => start(game.id);
 $('menuBtn').onclick = toMenu;
 $('homeBtn').onclick = () => { if (S.mode === 'play') { endGame(); } toMenu(); };
+
+/* ---------- pause ---------- */
+function setPaused(on) {
+  S.paused = on;
+  if (on) pauseAudio(); else resumeAudio();
+  $('pausePanel').hidden = !on;
+}
+$('pauseBtn').onclick = () => { if (S.mode === 'play') { sfx.click(); setPaused(true); } };
+$('resumeBtn').onclick = () => { setPaused(false); sfx.click(); };
+$('restartBtn').onclick = () => { setPaused(false); start(game.id); };
+$('quitBtn').onclick = () => { setPaused(false); endGame(); toMenu(); };
+// Fire button: throws a fireball when Pearl has some.
+$('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (S.mode === 'play' && !S.paused) game.fire(); });
 // Hovering or focusing a game card shows its world behind the menu.
 for (const [btn, id] of [['playRun', 'run'], ['playDive', 'dive']]) {
   $(btn).addEventListener('pointerenter', e => { if (e.pointerType === 'mouse' && S.mode === 'menu') switchTo(id); });
@@ -183,16 +220,32 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => { if (S.mode === 'play') game.pointerMove(e); });
 canvas.addEventListener('pointerup', e => { if (S.mode === 'play') game.pointerUp(e); });
 canvas.addEventListener('pointercancel', e => { if (S.mode === 'play') game.pointerUp(e); });
-addEventListener('keydown', e => { if (S.mode === 'play') game.keyDown(e); });
+addEventListener('keydown', e => {
+  if (S.mode !== 'play') return;
+  if (e.key === 'p' || e.key === 'Escape') { setPaused(!S.paused); return; }
+  if (!S.paused) game.keyDown(e);
+});
 addEventListener('keyup', e => game.keyUp(e));
-document.addEventListener('visibilitychange', () => { S.paused = document.hidden; });
+// Leaving the app mid-game pauses it until Resume; otherwise the scene just stops while hidden.
+document.addEventListener('visibilitychange', () => {
+  if (S.mode === 'play') { if (document.hidden) setPaused(true); return; }
+  S.paused = document.hidden;
+});
 
 /* ---------- update and render ---------- */
 const front = new THREE.Vector3(), behind = new THREE.Vector3(), camTarget = new THREE.Vector3();
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function update(dt) {
   S.t += dt;
+  if (S.mode === 'play') {
+    // Pearl slowly pulls away again while she runs cleanly. Mummy gets quicker at higher levels.
+    const lv = game.st.level || 1;
+    S.gap = Math.min(GAP_MAX, S.gap + dt * Math.max(.04, .16 - lv * .01));
+    if (S.stumble > 0) S.stumble -= dt;
+    S.hudT = (S.hudT || 0) - dt; if (S.hudT <= 0) { S.hudT = .2; hud(); }
+  }
   game.update(dt);
+  powers.update(dt, pos => game.fireHit(pos), game.bubbleY);
   if (S.inv > 0) { S.inv -= dt; P.inner.visible = Math.floor(S.inv * 12) % 2 === 0; } else P.inner.visible = true;
   confetti.update(dt);
   // Camera in front of Pearl on the menu and end card so we see her face, behind her while playing.
@@ -223,5 +276,5 @@ function frame(now) {
 resize(); setSound(); updateBank(); showPhotoButtons(); hud();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // Test hook: lets automated checks fast-forward the game.
-if (location.search.includes('debug')) window.__pw = { S, update, games, get game() { return game; }, start };
+if (location.search.includes('debug')) window.__pw = { S, update, games, get game() { return game; }, start, powers, setPaused };
 requestAnimationFrame(frame);
