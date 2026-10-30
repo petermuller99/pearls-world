@@ -20,7 +20,8 @@ The main game is **3D** (Three.js r170, vendored in `vendor/` so it works offlin
 
 Shared features:
 - Photo upload: center-cropped to 200x200 JPEG, stored in localStorage (`pw_face`) on the phone only, shown on the 3D Pearl's face with a soft faded edge. Her skin tone is read from the photo and applied to her body. Falls back to the cartoon face. Never commit Pearl's photos to this public repo.
-- Pearl's look (`pw_look`): skin tone (7 swatches + "From photo"), hair (two puffs, one puff, short curls, gele), hair colour, bow colour or none, ankara outfit (5 colourways).
+- Pearl's look (`pw_look`): skin tone (7 swatches + "From photo"), hair (baby curls, short curls, two puffs, one puff, gele), hair colour, bow style (headband bow or little bow) and colour or none, outfit (sage ribbed romper or 5 ankara colourways), striped socks or none. She always has little ears with gold studs, lace flutter sleeves and chubby cheeks.
+- Defaults were matched to a photo Oluwashina shared (the photo itself is not in the repo): warm deep brown skin `#8f6038`, soft near-black baby curls `#1c1410`, a big sage headband bow `#bfe0b5`, sage ribbed romper with lace sleeves, striped socks, white sandals, tiny gold stud earrings.
 - Storage: piggy bank `pw_bank`, best walk `pw_best`, sound effects off `pw_mute`, music off `pw_music_off`, last game shown on the menu `pw_last`.
 - WebAudio beeps for sound effects.
 - Installable on phones (PWA): `manifest.webmanifest`, `sw.js` (offline cache), `icons/`. When adding files the game needs offline, list them in `sw.js` and bump its `VERSION`.

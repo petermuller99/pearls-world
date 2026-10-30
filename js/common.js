@@ -44,11 +44,14 @@ function ankara([base, ring, dot, trim]) {
 
 /* ---------- Pearl's look: the choices in the "Pearl's look" menu ---------- */
 export const LOOKS = {
-  skin: ['#d9a77e', '#c68a5e', '#a86b45', '#8a5a3c', '#6e4630', '#55362a', '#3f281f'],
-  hair: [['puffs', 'Two puffs'], ['puff', 'One puff'], ['curls', 'Short curls'], ['gele', 'Gele']],
-  hairColor: ['#140c0a', '#2b1a12', '#4a2a18'],
-  bow: ['#ff5c8a', '#ff6b4a', '#ffc93c', '#0f8a8f', '#fff8f0', 'none'],
+  skin: ['#c68a5e', '#a86b45', '#8f6038', '#7a4e30', '#6e4630', '#55362a', '#3f281f'],
+  hair: [['baby', 'Baby curls'], ['curls', 'Short curls'], ['puffs', 'Two puffs'], ['puff', 'One puff'], ['gele', 'Gele']],
+  hairColor: ['#1c1410', '#2b1a12', '#4a2a18'],
+  bowStyle: [['headband', 'Headband bow'], ['clip', 'Little bow']],
+  bow: ['#bfe0b5', '#ff5c8a', '#ff6b4a', '#ffc93c', '#0f8a8f', '#fff8f0', 'none'],
+  socks: [['stripes', 'Striped socks'], ['none', 'No socks']],
   outfit: {
+    sage: ['#c8e2bd', '#b2d3a5', '#9fc492', '#fff8f0'],
     coral: ['#ff6b4a', '#ffc93c', '#24163d', '#0f8a8f'],
     lagoon: ['#0f8a8f', '#ffc93c', '#ff6b4a', '#fff8f0'],
     pink: ['#ff5c8a', '#fff8f0', '#6b4fc9', '#ffc93c'],
@@ -56,9 +59,24 @@ export const LOOKS = {
     purple: ['#6b4fc9', '#ffc93c', '#ff5c8a', '#fff8f0'],
   },
 };
-export const DEFAULT_LOOK = { skin: '#8a5a3c', hair: 'puffs', hairColor: '#2b1a12', bow: '#ff5c8a', outfit: 'coral' };
+// Defaults match Pearl: warm deep brown skin, soft baby curls, her sage headband bow,
+// sage romper with lace sleeves, striped socks and tiny gold earrings.
+export const DEFAULT_LOOK = { skin: '#8f6038', hair: 'baby', hairColor: '#1c1410', bowStyle: 'headband', bow: '#bfe0b5', outfit: 'sage', socks: 'stripes' };
+// Ribbed knit with a lacy scalloped hem, like her sage romper.
+function ribbed([base, rib, lace, hole]) {
+  return tex(256, 128, (c, w, h) => {
+    c.fillStyle = base; c.fillRect(0, 0, w, h);
+    c.fillStyle = rib; for (let x = 0; x < w; x += 8) c.fillRect(x, 0, 3, h);
+    c.fillStyle = lace; c.fillRect(0, h - 22, w, 22);
+    c.fillStyle = hole; for (let x = 6; x < w; x += 14) { c.beginPath(); c.arc(x, h - 12, 3, 0, 7); c.fill(); }
+  }, true);
+}
 const outfitTex = {};
-const getOutfit = k => outfitTex[k] || (outfitTex[k] = ankara(LOOKS.outfit[k] || LOOKS.outfit.coral));
+const getOutfit = k => outfitTex[k] || (outfitTex[k] = (k === 'sage' ? ribbed : ankara)(LOOKS.outfit[k] || LOOKS.outfit.coral));
+const sockTex = tex(64, 64, (c, w, h) => {
+  c.fillStyle = '#fbf3df'; c.fillRect(0, 0, w, h);
+  [['#24163d', 6], ['#ff9f4a', 18], ['#ffc93c', 30], ['#24163d', 42], ['#ff9f4a', 54]].forEach(([col, y]) => { c.fillStyle = col; c.fillRect(0, y, w, 3); });
+}, true);
 const scaleTex = tex(128, 128, (c, w, h) => {
   c.fillStyle = '#1fb5a8'; c.fillRect(0, 0, w, h);
   c.strokeStyle = '#7fe3d2'; c.lineWidth = 3;
@@ -76,6 +94,9 @@ export const M = {
   cheek: new THREE.MeshBasicMaterial({ color: 0xff8a8a, transparent: true, opacity: .45 }),
   dress: new THREE.MeshLambertMaterial({ map: getOutfit('coral') }),
   bow: new THREE.MeshLambertMaterial({ color: COL.blush }),
+  lace: new THREE.MeshLambertMaterial({ color: 0xa9c49b }),
+  sock: new THREE.MeshLambertMaterial({ map: sockTex }),
+  gold: new THREE.MeshStandardMaterial({ color: 0xe0b040, metalness: .7, roughness: .3, emissive: 0x4a3000, emissiveIntensity: .3 }),
   gele: new THREE.MeshLambertMaterial({ map: getOutfit('sun') }),
   shoe: new THREE.MeshLambertMaterial({ color: COL.pearl }),
   tail: new THREE.MeshLambertMaterial({ map: scaleTex }),
@@ -106,10 +127,13 @@ export function makePearl() {
   const limb = (len, r) => { const g = new THREE.CapsuleGeometry(r, len, 4, 10); g.translate(0, -len / 2 - r / 2, 0); return g; };
   const armGeo = limb(.24, .07), legGeo = limb(.24, .08);
   const arms = [-1, 1].map(s => { const a = new THREE.Group(); a.position.set(s * .2, .44, 0); a.add(new THREE.Mesh(armGeo, M.skin)); torso.add(a); return a; });
+  // Lace flutter sleeves on her shoulders.
+  for (const s of [-1, 1]) { const f = mesh(G.sphere, M.lace, .14, .06, .13); f.position.set(s * .2, .45, 0); f.rotation.z = s * -.5; torso.add(f); }
   const legs = [-1, 1].map(s => {
     const l = new THREE.Group(); l.position.set(s * .1, 0, 0);
     l.add(new THREE.Mesh(legGeo, M.skin));
     const shoe = mesh(G.lowSphere, M.shoe, .09, .07, .12); shoe.position.set(0, -.36, .03); l.add(shoe);
+    const sock = mesh(G.cyl, M.sock, .088, .14, .088); sock.position.y = -.27; l.add(sock); l.userData.sock = sock;
     hips.add(l); return l;
   });
 
@@ -130,7 +154,7 @@ export function makePearl() {
   head.add(mesh(G.sphere, M.skin, .36));
   const cap = new THREE.Mesh(new THREE.SphereGeometry(.375, 24, 12, 0, Math.PI * 2, 0, Math.PI * .42), M.hair);
   cap.rotation.x = -.35; head.add(cap);
-  const hairs = { puffs: new THREE.Group(), puff: new THREE.Group(), curls: new THREE.Group(), gele: new THREE.Group() };
+  const hairs = { baby: new THREE.Group(), puffs: new THREE.Group(), puff: new THREE.Group(), curls: new THREE.Group(), gele: new THREE.Group() };
   for (const g of Object.values(hairs)) head.add(g);
   for (const s of [-1, 1]) { const bun = mesh(G.sphere, M.hair, .17); bun.position.set(s * .3, .26, -.05); hairs.puffs.add(bun); }
   const top = mesh(G.sphere, M.hair, .25, .22, .25); top.position.set(0, .38, -.1); hairs.puff.add(top);
@@ -142,6 +166,14 @@ export function makePearl() {
     if (c.position.z > .22 && c.position.y < .2) continue;
     hairs.curls.add(c);
   }
+  // Baby curls: soft little curls hugging the head, a bit fuller at the back.
+  for (let i = 0; i < 46; i++) {
+    const a = i * 2.39996, up = .15 + ((i * 7) % 46) / 46 * 1.2;
+    const c = mesh(G.lowSphere, M.hair, .05 + (i % 3) * .01);
+    c.position.set(Math.cos(a) * Math.cos(up) * .365, Math.sin(up) * .365 + .03, Math.sin(a) * Math.cos(up) * .365 - .04);
+    if (c.position.z > .12 && c.position.y < .26) continue;
+    hairs.baby.add(c);
+  }
   // Gele: a wrapped headtie with a tall fanned knot, in ankara.
   const wrap = new THREE.Mesh(new THREE.SphereGeometry(.4, 24, 12, 0, Math.PI * 2, 0, Math.PI * .45), M.gele); wrap.rotation.x = -.3; hairs.gele.add(wrap);
   const band = new THREE.Mesh(new THREE.TorusGeometry(.36, .07, 8, 28), M.gele); band.rotation.x = Math.PI / 2 - .3; band.position.y = .1; hairs.gele.add(band);
@@ -149,12 +181,28 @@ export function makePearl() {
   const bow = new THREE.Group(); bow.position.set(.17, .33, -.06); bow.rotation.set(-.5, 0, -.45); head.add(bow);
   for (const s of [-1, 1]) { const w = mesh(G.sphere, M.bow, .13, .09, .06); w.position.x = s * .11; w.rotation.z = s * .35; bow.add(w); }
   bow.add(mesh(G.sphere, M.bowKnot, .055));
+  // Headband with a big soft bow at the front, like her sage one.
+  const headband = new THREE.Group(); head.add(headband);
+  const hb = new THREE.Mesh(new THREE.TorusGeometry(.375, .028, 8, 24, Math.PI), M.bow); hb.rotation.x = -.3; headband.add(hb);
+  const bigBow = new THREE.Group(); bigBow.position.set(.13, .3, .2); bigBow.rotation.set(-.6, .2, -.25); headband.add(bigBow);
+  for (const s of [-1, 1]) {
+    const w = mesh(G.sphere, M.bow, .17, .11, .06); w.position.x = s * .15; w.rotation.z = s * .3; bigBow.add(w);
+    const tail = mesh(G.sphere, M.bow, .06, .1, .03); tail.position.set(s * .08, -.12, .01); tail.rotation.z = s * .5; bigBow.add(tail);
+  }
+  bigBow.add(mesh(G.sphere, M.bow, .065, .075, .06));
+  // Little ears with tiny gold studs.
+  for (const s of [-1, 1]) {
+    const ear = mesh(G.sphere, M.skin, .045, .08, .065); ear.position.set(s * .355, -.03, .0); head.add(ear);
+    const stud = mesh(G.sphere, M.gold, .02); stud.position.set(s * .37, -.09, .03); head.add(stud);
+  }
 
   const face = new THREE.Group(); head.add(face);
   for (const s of [-1, 1]) {
-    const eye = mesh(G.sphere, M.eye, .045); eye.position.set(s * .13, .02, .335); face.add(eye);
-    const hi = mesh(G.sphere, M.white, .014); hi.position.set(s * .13 + .015, .04, .375); face.add(hi);
-    const ch = mesh(G.sphere, M.cheek, .07, .05, .02); ch.position.set(s * .22, -.09, .29); ch.lookAt(s * .6, -.25, .8); face.add(ch);
+    const eye = mesh(G.sphere, M.eye, .052, .056, .045); eye.position.set(s * .13, .03, .333); face.add(eye);
+    const hi = mesh(G.sphere, M.white, .016); hi.position.set(s * .13 + .017, .052, .375); face.add(hi);
+    const ch = mesh(G.sphere, M.cheek, .085, .06, .02); ch.position.set(s * .21, -.1, .35); ch.lookAt(s * .6, -.25, 1.2); face.add(ch);
+    // Round chubby cheeks.
+    const chub = mesh(G.sphere, M.skin, .14, .12, .1); chub.position.set(s * .17, -.12, .25); face.add(chub);
   }
   const smile = new THREE.Mesh(new THREE.TorusGeometry(.08, .016, 6, 14, Math.PI), M.eye);
   smile.rotation.z = Math.PI; smile.position.set(0, -.07, .335); face.add(smile);
@@ -167,7 +215,7 @@ export function makePearl() {
 
   const shadow = mesh(G.shadow, M.shadow, .38); shadow.position.y = .015; root.add(shadow);
 
-  return { root, inner, hips, torso, head, arms, legs, tail, tailSegs, face, photo, photoMat, shadow, cap, hairs, bow };
+  return { root, inner, hips, torso, head, arms, legs, tail, tailSegs, face, photo, photoMat, shadow, cap, hairs, bow, headband };
 }
 
 export function setMermaid(P, on) {
@@ -181,7 +229,10 @@ export function applyLook(P, look) {
   M.hair.color.set(L.hairColor);
   for (const [k, g] of Object.entries(P.hairs)) g.visible = k === L.hair;
   P.cap.visible = L.hair !== 'gele';
-  P.bow.visible = L.bow !== 'none' && L.hair !== 'gele';
+  const showBow = L.bow !== 'none' && L.hair !== 'gele';
+  P.bow.visible = showBow && L.bowStyle === 'clip';
+  P.headband.visible = showBow && L.bowStyle !== 'clip';
+  P.legs.forEach(l => { l.userData.sock.visible = L.socks !== 'none'; });
   if (L.bow !== 'none') M.bow.color.set(L.bow);
   M.dress.map = getOutfit(L.outfit); M.dress.needsUpdate = true;
   M.gele.map = getOutfit(L.outfit === 'sun' ? 'coral' : 'sun'); M.gele.needsUpdate = true;

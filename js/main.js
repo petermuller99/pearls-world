@@ -159,7 +159,9 @@ function buildLook() {
   chipRow($('lookSkin'), skins, 'skin', (b, v, label) => { swatch(b, v, label === v ? 'Skin tone' : label); if (label === 'From photo') { b.className = 'sw photo'; b.textContent = 'From photo'; } });
   chipRow($('lookHair'), LOOKS.hair, 'hair', (b, v, label) => { b.className = 'chip'; b.textContent = label; });
   chipRow($('lookHairColor'), LOOKS.hairColor, 'hairColor', (b, v) => swatch(b, v, 'Hair colour'));
+  chipRow($('lookBowStyle'), LOOKS.bowStyle, 'bowStyle', (b, v, label) => { b.className = 'chip'; b.textContent = label; });
   chipRow($('lookBow'), LOOKS.bow, 'bow', (b, v) => swatch(b, v, v === 'none' ? 'none' : 'Bow colour'));
+  chipRow($('lookSocks'), LOOKS.socks, 'socks', (b, v, label) => { b.className = 'chip'; b.textContent = label; });
   chipRow($('lookOutfit'), Object.keys(LOOKS.outfit), 'outfit', (b, v) => { swatch(b, LOOKS.outfit[v][0], v + ' ankara'); b.style.background = `radial-gradient(circle at 50% 50%, ${LOOKS.outfit[v][2]} 0 4px, ${LOOKS.outfit[v][1]} 4px 9px, ${LOOKS.outfit[v][0]} 9px)`; });
 }
 $('lookBtn').onclick = () => { unlock(); sfx.click(); buildLook(); $('menu').hidden = true; $('lookPanel').hidden = false; };
