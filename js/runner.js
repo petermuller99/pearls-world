@@ -2,6 +2,7 @@
 import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, store, COL } from './common.js';
 import { sfx } from './audio.js';
 import { makeMum, makePowerItem, animatePowerItem, POWERS } from './chase.js';
+import { createDaddy } from './daddy.js';
 
 const LANES = [-1.5, 0, 1.5];
 const MILESTONES = [
@@ -14,7 +15,7 @@ const STAGE_SPEED = [5, 7, 9.5];
 const LEVEL_EVERY = 200, MAX_LEVEL = 12, MAX_SPEED = 17;
 const DECK_W = 13, SEG = 20, PYLON_GAP = 110;
 
-export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, mumSay, levelUp, powers }) {
+export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, mumSay, say, levelUp, powers }) {
   const world = new THREE.Group(); world.visible = false; scene.add(world);
   const sky = gradientTex([[0, '#ff8f6b'], [.55, '#ffc58a'], [1, '#ffe3b0']]);
   const fog = new THREE.Fog(0xffd9a8, 40, 170);
@@ -295,6 +296,11 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     lines: ['Pearl, come back!', 'Careful o!', 'Wait for Mummy!', 'Slow down, my baby!', 'Pearl! Ah ah!'],
     closeLines: ['Almost got you!', 'Come here, you!', 'I see you o!'],
   });
+  // Daddy cheers at milestones and tosses power-ups into Pearl's lane now and then.
+  const dad = createDaddy(world, {
+    say: t => say('dad', t), kinds: POWERS,
+    give(kind, from) { const it = addItem(kind, st.lane, st.z - 8 - st.speed * .6); it.toss = { t: 0, from }; it.holder.position.copy(from); },
+  });
   const ENEMY = { goat: 1, crow: 1 }, SOLID = { block: 1, ball: 1, goat: 1, crow: 1 };
   function knockOut(it) {
     it.gone = true; it.fly = 1;
@@ -319,7 +325,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     start() {
       clearItems();
       Object.assign(st, { speed: STAGE_SPEED[0], stage: 0, lane: 1, y: 0, vy: 0, jumps: 0, ms: 0, nextSpawn: st.z - 24, wave: 0, turn: 0, waveT: 0, startZ: st.z, dist: 0, level: 1, hornT: 0, rows: 0 });
-      mum.reset(st.x, 0, st.z);
+      mum.reset(st.x, 0, st.z); dad.reset();
     },
     scoreText() { return `${S.pearls} pearls · ${Math.floor(st.dist)} m · Level ${st.level || 1}`; },
     finish(bank) {
@@ -363,6 +369,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
       P.root.rotation.set(0, 0, (LANES[st.lane] - st.x) * -.12);
       P.shadow.position.y = .015 - st.y; P.shadow.scale.setScalar(Math.max(.15, .38 - st.y * .12));
       mum.update(dt, { px: st.x, py: 0, pz: st.z, gap: S.gap, mode: S.mode, caught: S.caught, t: S.t, speed: st.speed });
+      dad.update(dt, { px: st.x, py: 0, pz: st.z, speed: st.speed, gameMode: S.mode, caught: S.caught, time: S.t, diff: S.diff });
 
       if (playing) {
         const next = MILESTONES[st.ms];
@@ -370,6 +377,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
           st.ms++; banner(next.t); sfx.milestone(); confetti.burst(tmpV.set(st.x, 1.2, st.z - 1), 60);
           if (next.stage != null) st.stage = next.stage;
           st.waveT = 1.8;
+          dad.cheer(st.x, 0, st.z, 18 + st.speed * 1.5);
           // Clear the way while she turns round to wave at Daddy.
           for (const it of items) if (!it.gone && SOLID[it.kind] && it.z < st.z && it.z > st.z - st.speed * 3 - 6) { it.gone = true; it.fly = 1; }
         }
@@ -378,6 +386,14 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
 
       for (let i = items.length - 1; i >= 0; i--) {
         const it = items[i];
+        if (it.toss) {
+          // A power-up Daddy threw, flying in an arc to land in Pearl's lane.
+          const k = Math.min(1, (it.toss.t += dt / .7)), f = it.toss.from;
+          it.holder.position.set(lerp(f.x, LANES[it.lane], k), f.y * (1 - k) + Math.sin(k * Math.PI) * 1.4, lerp(f.z, it.z, k));
+          if (it.m.userData.spin) animatePowerItem(it.m, S.t, dt);
+          if (k >= 1) delete it.toss;
+          continue;
+        }
         if (it.kind === 'pearl') { it.m.position.y = it.baseY + Math.sin(S.t * 4 + it.z) * .06; it.m.rotation.y += dt * 2; }
         if (it.kind === 'bottle') it.m.rotation.y += dt * 2.5;
         if (it.vz && !it.fly) {
@@ -465,11 +481,11 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
     bubbleY: .6,
     // e: 0 = in front of Pearl (menu, end card), 1 = chasing behind her.
     placeCamera(camera, e, wide, front, behind, look) {
-      front.set(st.x - .8, 1.25, st.z - 3.4);
+      front.set(st.x - (wide ? .6 : .25), wide ? 1.1 : 1.3, st.z - (wide ? 5.6 : 4.4));
       behind.set(st.x * .55, 3.1, st.z + 5.4);
       camera.position.lerpVectors(front, behind, e);
       camera.position.x += Math.sin(e * Math.PI) * 2.5;
-      look.set(lerp(st.x - (wide ? 1.3 : 0), st.x * .35, e), lerp(wide ? .75 : -.2, .7, e) + st.y * .3 * e, lerp(st.z, st.z - 7, e));
+      look.set(lerp(st.x - (wide ? 2.3 : 0), st.x * .35, e), lerp(wide ? .75 : -.2, .7, e) + st.y * .3 * e, lerp(st.z, st.z - 7, e));
       camera.lookAt(look);
     },
     pointerDown(e) { touch = { x: e.clientX, y: e.clientY, t: performance.now(), used: false }; },

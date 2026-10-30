@@ -2,7 +2,7 @@
 // Game files: serve from cache straight away, refresh the cache in the background,
 // so the game opens instantly offline and picks up updates on the next launch.
 // Bump VERSION when the list of files below changes.
-const VERSION = 'pw-v9';
+const VERSION = 'pw-v10';
 const SHELL = [
   './',
   'index.html',
@@ -11,6 +11,7 @@ const SHELL = [
   'js/audio.js',
   'js/chase.js',
   'js/shop.js',
+  'js/daddy.js',
   'js/runner.js',
   'js/hunt.js',
   'vendor/three.module.min.js',
