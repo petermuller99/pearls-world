@@ -18,7 +18,7 @@ export const UPGRADES = [
     says: ['Power-ups at normal rate', 'Power-ups 35% more often', 'Power-ups 70% more often', 'Power-ups twice as often'] },
   // Zombie Defence
   { id: 'zAuto', group: 'zombie', icon: '🤖', name: 'Auto blaster', costs: [100, 250, 500],
-    says: ['Fires when the circle is on a zombie', 'Also fires at any zombie in view, slowly', 'Also fires at any zombie in view, medium speed', 'Also fires at any zombie in view, full speed'] },
+    says: ['You shoot with 🎯 or a tap', 'Fires by itself when the circle is on a zombie, slowly', 'Fires by itself on a zombie, medium speed', 'Fires by itself on a zombie, full speed'] },
   { id: 'zRate', group: 'zombie', icon: '⚡', name: 'Rapid fire', costs: [80, 200, 400],
     says: ['Normal fire rate', 'Fire 18% faster', 'Fire 39% faster', 'Fire 67% faster'] },
   { id: 'zDmg', group: 'zombie', icon: '💪', name: 'Power shots', costs: [80, 200, 400],

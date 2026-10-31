@@ -62,7 +62,7 @@ function hud() {
   $('score').textContent = game.scoreText();
   // Zombie Defence shows the house's health and the shooter buttons instead of the chase.
   const z = game.id === 'zombie';
-  $('chase').hidden = z; $('houseBar').hidden = !z; $('whoBar').hidden = !z || S.mode !== 'play'; $('crosshair').hidden = !z || S.mode !== 'play';
+  $('chase').hidden = z; $('houseBar').hidden = !z; $('whoBar').hidden = !z || S.mode !== 'play'; $('crosshair').hidden = !z || S.mode !== 'play'; $('shootBtn').hidden = !z || S.mode !== 'play';
   if (z) {
     $('houseFill').style.width = `${game.house}%`; $('houseBar').classList.toggle('close', game.house < 30);
     for (const b of document.querySelectorAll('#whoBar button')) b.setAttribute('aria-pressed', String(b.dataset.who === game.who));
@@ -213,6 +213,13 @@ $('resumeBtn').onclick = () => { setPaused(false); sfx.click(); };
 $('restartBtn').onclick = () => { setPaused(false); start(game.id); };
 $('quitBtn').onclick = () => { setPaused(false); endGame(); toMenu(); };
 // Fire button: throws a fireball when Pearl has some.
+// Zombie Defence 🎯 button: fires while held.
+{
+  const b = $('shootBtn');
+  const up = () => { b.classList.remove('on'); if (game.shootUp) game.shootUp(); };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); unlock(); if (S.mode !== 'play' || S.paused || !game.shootDown) return; try { b.setPointerCapture(e.pointerId); } catch {} b.classList.add('on'); game.shootDown(); });
+  for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(t, up);
+}
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (S.mode === 'play' && !S.paused) game.fire(); });
 // Hovering or focusing a game card shows its world behind the menu.
 for (const [btn, id] of [['playRun', 'run'], ['playDive', 'dive'], ['playZombie', 'zombie']]) {
