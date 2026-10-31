@@ -36,6 +36,8 @@ function resize() {
   gfx.resize(w, h);
 }
 addEventListener('resize', resize);
+// Some phones change the game area's size (address bar, install) without a resize event.
+if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
 
 /* ---------- shared game state ---------- */
 let diffKey = DIFFICULTY[store.get('pw_difficulty', 'normal')] ? store.get('pw_difficulty', 'normal') : 'normal';
