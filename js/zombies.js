@@ -1,6 +1,6 @@
 // Zombie Defence: a first-person shooter on the porch of Pearl's family home in Lagos at dusk.
 // Silly cartoon zombies shuffle through the gate wanting to eat Pearl; the family pops them
-// into confetti. Drag to look around, tap or hold to shoot, switch between Pearl (bubble
+// into confetti. Drag to put the aim circle on a zombie and it fires by itself, switch between Pearl (bubble
 // blaster), Mummy (slipper toss) and Daddy (fireball cannon). Whoever isn't being played
 // keeps defending on their own. Between and during waves, plant Lagos defenders in the
 // yard with naira (₦) earned from popping zombies, lane tower-defence style. Zombies come
@@ -275,6 +275,8 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
   }
 
   /* ---------- first-person view: the blaster in your hand ---------- */
+  // Where your shots start, in camera space: the blaster's tip, just below and right of the circle.
+  const MUZZLE = { x: .17, y: -.19, z: -.85 };
   const view = new THREE.Group(); view.visible = false; camera.add(view);
   const viewSkin = new THREE.MeshLambertMaterial({ color: 0x8f6038 });
   const VM = {
@@ -282,10 +284,10 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     mum: (() => { const g = new THREE.Group(); const s = mesh(G.box, shotMats.slipper, .16, .04, .36); s.rotation.x = -.6; g.add(s); const st2 = new THREE.Mesh(new THREE.TorusGeometry(.07, .02, 6, 12, Math.PI), shotMats.strap); st2.rotation.x = -Math.PI / 2 - .6; st2.position.set(0, .04, -.05); g.add(st2); return g; })(),
     dad: (() => { const g = new THREE.Group(); const b = mesh(G.cyl, new THREE.MeshLambertMaterial({ color: 0x2a2433 }), .1, .55, .1); b.rotation.x = Math.PI / 2; g.add(b); const ring = mesh(G.cyl, new THREE.MeshLambertMaterial({ color: 0xd9b04a }), .115, .06, .115); ring.rotation.x = Math.PI / 2; ring.position.z = -.22; g.add(ring); const tip = mesh(G.sphere, shotMats.core, .06); tip.position.z = -.28; g.add(tip); return g; })(),
   };
-  for (const g of Object.values(VM)) { const hand = mesh(G.sphere, viewSkin, .07, .06, .1); hand.position.set(0, -.07, .12); g.add(hand); g.position.set(.28, -.26, -.55); g.traverse(o => { o.userData.noShadow = true; }); view.add(g); }
+  for (const g of Object.values(VM)) { const hand = mesh(G.sphere, viewSkin, .07, .06, .1); hand.position.set(0, -.07, .12); g.add(hand); g.position.set(.2, -.25, -.55); g.traverse(o => { o.userData.noShadow = true; }); view.add(g); }
 
   /* ---------- state ---------- */
-  const st = { boss: null, bossDone: false, shake: 0, cash: 0, placing: null, warnL: 0, warnR: 0, autoT: 0, level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 0, house: 100, kills: 0, who: 'pearl', yaw: 0, pitch: -.05, fireT: 0, helperT: { pearl: 0, mum: .5, dad: 1 }, aim: null, lock: null, chT: 0, holding: false, recoil: 0, groanT: 3, inside: false };
+  const st = { boss: null, bossDone: false, shake: 0, cash: 0, placing: null, warnL: 0, warnR: 0, autoT: 0, level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 0, house: 100, kills: 0, who: 'pearl', yaw: 0, pitch: -.05, fireT: 0, helperT: { pearl: 0, mum: .5, dad: 1 }, aim: null, lock: null, tap: false, holding: false, recoil: 0, groanT: 3, inside: false };
   const zombies = [];
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const eyePos = new THREE.Vector3(), menuPos = new THREE.Vector3(), menuQ = new THREE.Quaternion(), fpsQ = new THREE.Quaternion(), dummy = new THREE.PerspectiveCamera();
@@ -386,7 +388,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
   // Your shot: leaves the blaster but lands exactly where you tapped (the zombie, else the ground or sky there).
   function playerFire(dir, zTarget) {
     const W = WHO[st.who], origin = camera.getWorldPosition(new THREE.Vector3());
-    const from = camera.localToWorld(new THREE.Vector3(.28, -.2, -.8));
+    const from = camera.localToWorld(new THREE.Vector3(MUZZLE.x, MUZZLE.y, MUZZLE.z));
     const z = zTarget || assist(origin, dir);
     let to;
     if (z) to = leadOn(z, from, W);
@@ -397,26 +399,14 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
   }
   function fireFrom(who, target) {
     const from = eyeOf(who, new THREE.Vector3());
-    if (who === st.who) { from.copy(camera.localToWorld(new THREE.Vector3(.28, -.2, -.8))); st.recoil = 1; }
+    if (who === st.who) { from.copy(camera.localToWorld(new THREE.Vector3(MUZZLE.x, MUZZLE.y, MUZZLE.z))); st.recoil = 1; }
     else from.y -= .35;
     shoot(WHO[who], from, target, who === st.who ? S.up.zDmg : 1);
   }
 
-  // The aim circle shows where your shots go: on the zombie you tapped (it turns coral and
-  // follows it), else under your finger, else the middle of the screen.
-  const cross = document.getElementById('crosshair'), chPos = new THREE.Vector3();
-  function placeCrosshair(dt) {
-    if (!cross) return;
-    if (!st.holding) st.chT = Math.max(0, st.chT - dt);
-    if (st.lock && (st.lock.pop || (!st.holding && st.chT <= 0))) st.lock = null;
-    let x = innerWidth / 2, y = innerHeight / 2;
-    if (st.lock) {
-      chPos.copy(st.lock.g.position); chPos.y += .95 * st.lock.T.scale; chPos.project(camera);
-      if (chPos.z < 1) { x = (chPos.x + 1) / 2 * innerWidth; y = (1 - chPos.y) / 2 * innerHeight; }
-    } else if (st.aimPx && (st.holding || st.chT > 0)) { x = st.aimPx.x; y = st.aimPx.y; }
-    cross.style.left = x + 'px'; cross.style.top = y + 'px';
-    cross.classList.toggle('lock', !!st.lock);
-  }
+  // The aim circle stays in the middle of the screen: it is the gun. Coral when on a zombie.
+  const cross = document.getElementById('crosshair');
+  function placeCrosshair() { if (cross) cross.classList.toggle('lock', !!st.lock); }
 
   /* ---------- defenders planted in the yard ---------- */
   const defenders = [];
@@ -501,7 +491,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     usesChase: false,
     noFireButton: true,
     startBanner: 'Protect Pearl!',
-    hint: 'Drag to look. Tap a zombie to shoot.',
+    hint: 'Drag to put the circle on a zombie. It shoots by itself!',
     world, st, items: zombies, shadowLight: moonLight, shadowSize: 22,
     bubbleY: .55,
     get house() { return st.house; },
@@ -526,7 +516,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     start() {
       clearZombies();
       clearDefenders();
-      Object.assign(st, { level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 5, house: 100, kills: 0, yaw: 0, pitch: -.05, fireT: 0, aim: null, lock: null, chT: 0, holding: false, recoil: 0, cash: S.up.zCash, placing: null, warned: false, autoT: 0, boss: null, bossDone: false, shake: 0 });
+      Object.assign(st, { level: 1, wave: 0, toSpawn: 0, spawnT: 0, breakT: 5, house: 100, kills: 0, yaw: 0, pitch: -.05, fireT: 0, aim: null, lock: null, tap: false, holding: false, recoil: 0, cash: S.up.zCash, placing: null, warned: false, autoT: 0, boss: null, bossDone: false, shake: 0 });
       grid.visible = false;
       // Garden starter upgrade: Pepper Shooters already planted.
       [[-2, -10], [2, -10], [0, -12]].slice(0, S.up.zSeed).forEach(([x, z]) => plant('pepper', cellAt({ x, z }), true));
@@ -566,16 +556,19 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         } else if (!st.bossDone) { if (!zombies.some(z => !z.pop) || st.spawnT < -2.5) spawnBoss(); else st.spawnT -= dt; }
         else if (!zombies.some(z => !z.pop)) { st.breakT = 6; banner(`Wave ${st.wave} cleared! Plant more defenders!`); sfx.milestone(); }
 
-        // You: hold to keep firing at the finger (or straight ahead with the keyboard).
+        // You: shots always go to the circle in the middle. It fires by itself while the circle
+        // is on a zombie; a quick tap (or holding Space) fires at the circle anyway.
         st.fireT -= dt;
-        if (st.holding && st.fireT <= 0) {
-          st.fireT = WHO[st.who].rate * S.up.zRate;
-          if (st.lock && st.lock.pop) st.lock = null;
-          playerFire(st.aim ? st.aim.clone() : camera.getWorldDirection(new THREE.Vector3()), st.lock);
+        camera.updateMatrixWorld();
+        const aimO = camera.getWorldPosition(new THREE.Vector3()), aimD = camera.getWorldDirection(new THREE.Vector3());
+        st.lock = assist(aimO, aimD);
+        if ((st.lock || st.holding || st.tap) && st.fireT <= 0) {
+          st.fireT = WHO[st.who].rate * S.up.zRate; st.tap = false;
+          playerFire(aimD, st.lock);
         }
-        // Auto blaster upgrade: fire at the nearest zombie in view when you're not touching.
+        // Auto blaster upgrade: also fire at the nearest zombie in view when the circle is on none.
         st.autoT -= dt;
-        if (S.up.zAuto > 0 && !st.holding && st.autoT <= 0) {
+        if (S.up.zAuto > 0 && !st.lock && !st.holding && st.autoT <= 0) {
           const origin = camera.getWorldPosition(new THREE.Vector3()), fwd = camera.getWorldDirection(new THREE.Vector3());
           let best = null, bd = 40;
           for (const z of zombies) {
@@ -583,7 +576,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
             const c = tmpV2.copy(z.g.position).setY(.95 * z.T.scale), d = c.distanceTo(origin);
             if (d < bd && c.clone().sub(origin).normalize().dot(fwd) > .82) { bd = d; best = z; }
           }
-          if (best) { playerFire(fwd, best); st.lock = best; st.chT = .4; st.autoT = WHO[st.who].rate * S.up.zRate * [0, 2.2, 1.5, 1.05][S.up.zAuto]; }
+          if (best) { playerFire(fwd, best); st.autoT = WHO[st.who].rate * S.up.zRate * [0, 2.2, 1.5, 1.05][S.up.zAuto]; }
         }
         // The others defend on their own, a bit slower than you.
         for (const k of Object.keys(WHO)) {
@@ -767,7 +760,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
       if (st.recoil > 0) st.recoil = Math.max(0, st.recoil - dt * 6);
       view.position.z = st.recoil * .08; view.rotation.x = st.recoil * .15;
       view.visible = playing;
-      placeCrosshair(dt);
+      placeCrosshair();
     },
     // e: 0 = third-person view of the family and the house (menu, end card), 1 = first person.
     placeCamera(cam, e, wide) {
@@ -797,26 +790,25 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         }
         this._p = null; return;
       }
-      this._p = { x: e.clientX, y: e.clientY, yaw: st.yaw, pitch: st.pitch, drag: false, t: performance.now() }; this._aimAt(e, true); st.holding = true; st.fireT = Math.min(st.fireT, 0); },
+      this._p = { x: e.clientX, y: e.clientY, yaw: st.yaw, pitch: st.pitch, drag: false }; },
     pointerMove(e) {
       const p = this._p; if (!p) return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y;
-      if (!p.drag && Math.hypot(dx, dy) > 14) { p.drag = true; st.holding = false; st.lock = null; st.chT = 0; }
+      if (!p.drag && Math.hypot(dx, dy) > 10) p.drag = true;
       if (p.drag) {
         const k = 2.6 / (innerWidth || 400);
         st.yaw = THREE.MathUtils.clamp(p.yaw - dx * k, -1.2, 1.2);
         st.pitch = THREE.MathUtils.clamp(p.pitch - dy * k, -.45, .3);
-      } else this._aimAt(e, true);
+      }
     },
-    pointerUp() { if (st.holding) st.chT = .4; st.holding = false; this._p = null; },
-    // Turns a touch into an aim direction, and locks onto the zombie under (or near) it.
-    _aimAt(e, lock) {
+    // A quick tap without dragging fires one shot at the circle.
+    pointerUp() { if (this._p && !this._p.drag) st.tap = true; this._p = null; },
+    // Turns a touch into an aim direction (used to pick where to plant).
+    _aimAt(e) {
       const r = e.target.getBoundingClientRect();
       ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       camera.updateMatrixWorld();
       ray.setFromCamera(ndc, camera); st.aim = ray.ray.direction.clone();
-      st.aimPx = { x: e.clientX, y: e.clientY };
-      if (lock) st.lock = assist(camera.getWorldPosition(new THREE.Vector3()), st.aim);
     },
     keyDown(e) {
       const k = e.key;
@@ -824,7 +816,7 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
       if (k === 'ArrowRight' || k === 'd') { e.preventDefault(); st.yaw = Math.max(-1.2, st.yaw - .12); }
       if (k === 'ArrowUp' || k === 'w') { e.preventDefault(); st.pitch = Math.min(.3, st.pitch + .06); }
       if (k === 'ArrowDown' || k === 's') { e.preventDefault(); st.pitch = Math.max(-.45, st.pitch - .06); }
-      if (k === ' ' || k === 'Enter') { e.preventDefault(); st.aim = null; st.aimPx = null; st.lock = null; st.holding = true; }
+      if (k === ' ' || k === 'Enter') { e.preventDefault(); st.holding = true; }
       if (k === '1') setWho('pearl'); if (k === '2') setWho('mum'); if (k === '3') setWho('dad');
     },
     keyUp(e) { if (e.key === ' ' || e.key === 'Enter') st.holding = false; },
