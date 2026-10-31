@@ -128,6 +128,9 @@ p{margin:0}
 .badge{background:var(--pearl);color:var(--ink);border:2px solid var(--ink);border-radius:999px;padding:3px 8px}
 .fire{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(76px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;border:4px solid var(--ink);background:radial-gradient(circle at 40% 35%,#ffe066,#ff7a1a 60%,#e8331a);box-shadow:0 5px 0 var(--ink);font-size:38px;cursor:pointer;touch-action:none;display:grid;place-items:center;padding:0}
 .fire b{position:absolute;right:-6px;top:-6px;min-width:28px;height:28px;border-radius:999px;background:var(--pearl);border:3px solid var(--ink);font:800 15px/22px var(--body);color:var(--ink)}
+.shoot{bottom:calc(200px + env(safe-area-inset-bottom,0px));background:radial-gradient(circle at 40% 35%,#fff8f0,#ffc93c 65%,#ff6b4a)}
+@media (max-height:500px) and (orientation:landscape){.shoot{bottom:calc(28px + env(safe-area-inset-bottom,0px))}}
+.shoot.on{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
 .fire:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
 #ink{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .5s;background:radial-gradient(circle at 30% 40%,rgba(42,22,64,.85) 0 12%,transparent 13%),radial-gradient(circle at 62% 55%,rgba(42,22,64,.8) 0 16%,transparent 17%),radial-gradient(circle at 48% 30%,rgba(42,22,64,.75) 0 8%,transparent 9%),radial-gradient(circle at 70% 25%,rgba(42,22,64,.7) 0 6%,transparent 7%)}
 #ink.on{opacity:1;transition:opacity .08s}
@@ -186,6 +189,7 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
     <span id="whoWeapon">Bubble blaster</span>
   </div>
   <div id="mumSay" class="say off" role="status" aria-live="polite"></div>
+  <button id="shootBtn" class="fire shoot" hidden aria-label="Shoot">🎯</button>
   <button id="fireBtn" class="fire" hidden aria-label="Throw a fireball">🔥<b id="ammo">0</b></button>
   <div id="banner" class="off" role="status" aria-live="polite"></div>
   <div id="hint" class="off"></div>

@@ -1,6 +1,6 @@
 // Zombie Defence: a first-person shooter on the porch of Pearl's family home in Lagos at dusk.
 // Silly cartoon zombies shuffle through the gate wanting to eat Pearl; the family pops them
-// into confetti. Drag to put the aim circle on a zombie and it fires by itself, switch between Pearl (bubble
+// into confetti. Drag to put the aim circle on a zombie, tap or hold 🎯 to shoot, switch between Pearl (bubble
 // blaster), Mummy (slipper toss) and Daddy (fireball cannon). Whoever isn't being played
 // keeps defending on their own. Between and during waves, plant Lagos defenders in the
 // yard with naira (₦) earned from popping zombies, lane tower-defence style. Zombies come
@@ -490,8 +490,11 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
     id: 'zombie',
     usesChase: false,
     noFireButton: true,
+    // The 🎯 shoot button: hold to keep firing at the circle.
+    shootDown() { st.holding = true; },
+    shootUp() { st.holding = false; },
     startBanner: 'Protect Pearl!',
-    hint: 'Drag to put the circle on a zombie. It shoots by itself!',
+    hint: 'Drag to aim. Tap or hold 🎯 to shoot.',
     world, st, items: zombies, shadowLight: moonLight, shadowSize: 22,
     bubbleY: .55,
     get house() { return st.house; },
@@ -556,27 +559,20 @@ export function createZombies({ scene, P, confetti, S, banner, hud, levelUp, cam
         } else if (!st.bossDone) { if (!zombies.some(z => !z.pop) || st.spawnT < -2.5) spawnBoss(); else st.spawnT -= dt; }
         else if (!zombies.some(z => !z.pop)) { st.breakT = 6; banner(`Wave ${st.wave} cleared! Plant more defenders!`); sfx.milestone(); }
 
-        // You: shots always go to the circle in the middle. It fires by itself while the circle
-        // is on a zombie; a quick tap (or holding Space) fires at the circle anyway.
+        // You: shots always go to the circle in the middle. Hold the 🎯 button (or Space) to keep
+        // firing; a quick tap on the screen fires once.
         st.fireT -= dt;
         camera.updateMatrixWorld();
         const aimO = camera.getWorldPosition(new THREE.Vector3()), aimD = camera.getWorldDirection(new THREE.Vector3());
         st.lock = assist(aimO, aimD);
-        if ((st.lock || st.holding || st.tap) && st.fireT <= 0) {
+        if ((st.holding || st.tap) && st.fireT <= 0) {
           st.fireT = WHO[st.who].rate * S.up.zRate; st.tap = false;
           playerFire(aimD, st.lock);
         }
-        // Auto blaster upgrade: also fire at the nearest zombie in view when the circle is on none.
+        // Auto blaster upgrade: fires by itself while the circle is on a zombie.
         st.autoT -= dt;
-        if (S.up.zAuto > 0 && !st.lock && !st.holding && st.autoT <= 0) {
-          const origin = camera.getWorldPosition(new THREE.Vector3()), fwd = camera.getWorldDirection(new THREE.Vector3());
-          let best = null, bd = 40;
-          for (const z of zombies) {
-            if (z.pop) continue;
-            const c = tmpV2.copy(z.g.position).setY(.95 * z.T.scale), d = c.distanceTo(origin);
-            if (d < bd && c.clone().sub(origin).normalize().dot(fwd) > .82) { bd = d; best = z; }
-          }
-          if (best) { playerFire(fwd, best); st.autoT = WHO[st.who].rate * S.up.zRate * [0, 2.2, 1.5, 1.05][S.up.zAuto]; }
+        if (S.up.zAuto > 0 && st.lock && !st.holding && st.autoT <= 0 && st.fireT <= 0) {
+          playerFire(aimD, st.lock); st.autoT = WHO[st.who].rate * S.up.zRate * [0, 2.2, 1.5, 1.05][S.up.zAuto];
         }
         // The others defend on their own, a bit slower than you.
         for (const k of Object.keys(WHO)) {
