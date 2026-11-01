@@ -42,7 +42,7 @@ if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
 /* ---------- shared game state ---------- */
 let diffKey = DIFFICULTY[store.get('pw_difficulty', 'normal')] ? store.get('pw_difficulty', 'normal') : 'normal';
 let upgrades = loadUpgrades();
-const S = { up: upgradeEffects(upgrades), diff: DIFFICULTY[diffKey], mode: 'menu', t: 0, pearls: 0, inv: 0, cam: 0, paused: false, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false };
+const S = { up: upgradeEffects(upgrades), diff: DIFFICULTY[diffKey], mode: 'menu', t: 0, pearls: 0, inv: 0, cam: 0, paused: false, gap: GAP_START, ammo: 0, shieldT: 0, magnetT: 0, stumble: 0, caught: false, combo: 0, comboT: 0, shoo: {} };
 let bank = store.get('pw_bank', 0);
 const P = makePearl();
 scene.add(P.root);
@@ -111,6 +111,40 @@ function say(who, text) {
 }
 function mumSay(text) { say('mum', text); }
 function boost(amount, msg) { S.gap = Math.min(GAP_MAX, S.gap + amount); banner(msg); hud(); }
+// Knocking out an attacker with a fireball ("shooing" it). Quick knockouts chain into a
+// combo worth more pearls (+2, +4, +6 up to +10), each one helps Pearl pull away from
+// Mummy, Daddy cheers, and the end card counts them.
+const SHOO = {
+  goat: { one: 'goat', many: 'goats', bye: 'Bye bye, goat!', dad: ['Goat don run!', 'Shoo, goat! Na so!'] },
+  crow: { one: 'crow', many: 'crows', bye: 'Shoo, crow!', dad: ['Crow don fly!', 'Oya, comot, crow!'] },
+  puffer: { one: 'pufferfish', many: 'pufferfish', bye: 'Pop! Bye, pufferfish!', dad: ['Fish don pop!', 'Pop am, Pearl!'] },
+  octo: { one: 'octopus', many: 'octopuses', bye: 'Bye, octopus!', dad: ['Octopus don japa!', 'Ink no fit you!'] },
+};
+const DAD_CHEERS = ['Na you be the champion!', 'Pearl, you too much!', 'Ehen! Fire am!', 'Daddy is proud of you!'];
+const COMBO_TIME = 8;
+function shoo(kind) {
+  const k = SHOO[kind]; if (!k) return;
+  S.combo = S.comboT > 0 ? S.combo + 1 : 1; S.comboT = COMBO_TIME;
+  const gain = Math.min(10, 2 * S.combo);
+  S.pearls += gain; S.shoo[kind] = (S.shoo[kind] || 0) + 1;
+  S.gap = Math.min(GAP_MAX, S.gap + .6);
+  sfx.combo(S.combo);
+  banner(S.combo > 1 ? `Combo x${S.combo}! ${k.bye} +${gain}` : `${k.bye} +${gain}`);
+  if (S.combo >= 2 || Math.random() < .5) {
+    const lines = S.combo >= 3 ? DAD_CHEERS : k.dad;
+    say('dad', lines[Math.floor(Math.random() * lines.length)]); sfx.cheer();
+  }
+  hud();
+}
+// "Shooed away: 3 goats, 1 crow" for the end card, plus the best for this game.
+function shooText() {
+  const parts = Object.entries(S.shoo).filter(([, n]) => n > 0).map(([kind, n]) => `${n} ${n === 1 ? SHOO[kind].one : SHOO[kind].many}`);
+  const total = Object.values(S.shoo).reduce((a, n) => a + n, 0);
+  const bests = store.get('pw_shoo_best', {}), prev = bests[game.id] || 0;
+  if (total > prev) { bests[game.id] = total; store.set('pw_shoo_best', bests); }
+  if (!total) return '';
+  return ` Shooed away: ${parts.join(', ')}${total > prev && prev > 0 ? ' (new best!)' : prev > total ? ` (best ${prev})` : ''}.`;
+}
 function caught() {
   S.gap = 0; S.caught = true; hud();
   banner('Mummy caught you! Hug time!');
@@ -135,7 +169,7 @@ function buy(u) {
 }
 
 const powers = createPowers(scene, P, S, { banner, hud: () => hud() });
-const ctx = { scene, P, confetti, S, hurt, boost, mumSay, say, banner, hud: () => hud(), camera, levelUp, powers };
+const ctx = { scene, P, confetti, S, hurt, boost, shoo, mumSay, say, banner, hud: () => hud(), camera, levelUp, powers };
 const games = { run: createRunner(ctx), dive: createHunt(ctx), zombie: createZombies({ ...ctx, endGame: () => endGame() }) };
 let game = games[store.get('pw_last', 'run')] || games.run;
 game.enter();
@@ -152,7 +186,7 @@ function start(id) {
   switchTo(id);
   confetti.clear();
   S.up = upgradeEffects(upgrades);
-  Object.assign(S, { mode: 'play', pearls: 0, inv: 0, gap: Math.min(GAP_MAX, GAP_START + S.up.headStart), ammo: S.up.startAmmo, shieldT: 0, magnetT: 0, stumble: 0, caught: false });
+  Object.assign(S, { mode: 'play', pearls: 0, inv: 0, gap: Math.min(GAP_MAX, GAP_START + S.up.headStart), ammo: S.up.startAmmo, shieldT: 0, magnetT: 0, stumble: 0, caught: false, combo: 0, comboT: 0, shoo: {} });
   powers.reset();
   setPaused(false);
   game.start();
@@ -173,7 +207,7 @@ function endGame() {
   bank += S.pearls; store.set('pw_bank', bank);
   stopMusic(); (S.caught ? sfx.caught : sfx.gameOver)(); hud();
   const info = game.finish(bank);
-  $('overEyebrow').textContent = `${info.eyebrow} · ${S.diff.label}`; $('overTitle').textContent = info.title; $('overText').textContent = info.text;
+  $('overEyebrow').textContent = `${info.eyebrow} · ${S.diff.label}`; $('overTitle').textContent = info.title; $('overText').textContent = info.text + (game.usesChase !== false ? shooText() : '');
   setTimeout(() => { if (S.mode === 'over') { $('hud').hidden = true; $('over').hidden = false; } }, 900);
   // After the end jingle, the home tune comes back.
   setTimeout(homeMusic, 3000);
@@ -389,6 +423,7 @@ function update(dt) {
     const lv = game.st.level || 1;
     S.gap = Math.min(GAP_MAX, S.gap + dt * Math.max(.04, .16 - lv * .01) * S.diff.regen * S.up.regen);
     if (S.stumble > 0) S.stumble -= dt;
+    if (S.comboT > 0) S.comboT -= dt;
     S.hudT = (S.hudT || 0) - dt; if (S.hudT <= 0) { S.hudT = .2; hud(); }
   }
   if (S.mode === 'play' && game.usesChase === false) { S.hudT = (S.hudT || 0) - dt; if (S.hudT <= 0) { S.hudT = .25; hud(); } }
@@ -425,5 +460,5 @@ function frame(now) {
 resize(); setSound(); updateBank(); showPhotoButtons(); hud();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // Test hook: lets automated checks fast-forward the game.
-if (location.search.includes('debug')) window.__pw = { S, update, games, get game() { return game; }, start, powers, setPaused, gfx };
+if (location.search.includes('debug')) window.__pw = { S, update, games, get game() { return game; }, start, powers, setPaused, gfx, hurt };
 requestAnimationFrame(frame);
