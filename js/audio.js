@@ -134,11 +134,35 @@ const ZOMBIE = {
     if (lv >= 3 && (s === 7 || s === 15)) I.talk(t, 52, .7);
   },
 };
-const SONGS = { run: SUNSET, dive: LAGOON, zombie: ZOMBIE };
+// Pearl's Lullaby (home screen): a soft, happy highlife lullaby in G over G - Em - C - D.
+const HOME = {
+  bpm: () => 92,
+  roots: [43, 40, 36, 38],
+  chords: [[67, 71, 74], [64, 67, 71], [60, 64, 67], [62, 66, 69]],
+  melody: [
+    [[0, 71], [4, 74], [6, 72], [8, 71], [12, 67]],
+    [[0, 69], [4, 71], [6, 69], [8, 67], [12, 64]],
+    [[0, 64], [2, 67], [4, 72], [8, 71], [10, 69], [12, 67]],
+    [[0, 66], [4, 69], [8, 74], [12, 72], [14, 71]],
+  ],
+  play(step, t, sd) {
+    const s = step % 16, bar = Math.floor(step / 16), b = bar % 4, ch = this.chords[b], second = Math.floor(bar / 4) % 2;
+    if (s === 0) for (const m of ch) I.pad(t, m - 12, sd * 15, .6);
+    if (s === 0 || s === 6 || s === 10) I.bass(t, this.roots[b] + (s === 6 ? 7 : 0), sd * 3, .55);
+    if (s === 0 || s === 8) I.kick(t, .3);
+    if (s % 4 === 2) I.shaker(t, .55);
+    if (s % 4 === 2) I.guitar(t, ch[(s / 4 | 0) % 3] + 12, .6);
+    // The tune, and the second time round it sings an octave higher with an echo.
+    for (const [ms, m] of this.melody[b]) if (ms === s) I.kalimba(t, m + (second ? 12 : 0), second ? .7 : .9, !!second);
+  },
+};
+const SONGS = { run: SUNSET, dive: LAGOON, zombie: ZOMBIE, home: HOME };
 
 let song = null, step = 0, nextT = 0, timer = null, level = 1;
 export function playMusic(name) {
   if (!ensure()) return;
+  // The home tune keeps playing when you move around the menu.
+  if (name === 'home' && song === HOME && timer) return;
   stopMusic(true);
   song = SONGS[name]; step = 0; nextT = ac.currentTime + .08; level = 1;
   musicBus.gain.cancelScheduledValues(ac.currentTime);
