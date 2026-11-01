@@ -15,7 +15,7 @@ const STAGE_SPEED = [5, 7, 9.5];
 const LEVEL_EVERY = 200, MAX_LEVEL = 12, MAX_SPEED = 17;
 const DECK_W = 13, SEG = 20, PYLON_GAP = 110;
 
-export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, mumSay, say, levelUp, powers }) {
+export function createRunner({ scene, P, confetti, S, hurt, boost, shoo, banner, hud, mumSay, say, levelUp, powers }) {
   const world = new THREE.Group(); world.visible = false; scene.add(world);
   const sky = gradientTex([[0, '#ff8f6b'], [.55, '#ffc58a'], [1, '#ffe3b0']]);
   const fog = new THREE.Fog(0xffd9a8, 40, 170);
@@ -375,7 +375,7 @@ export function createRunner({ scene, P, confetti, S, hurt, boost, banner, hud, 
   function knockOut(it) {
     it.gone = true; it.fly = 1;
     confetti.burst(tmpV.set(LANES[it.lane], it.kind === 'crow' ? it.m.position.y : .6, it.z), 16);
-    if (ENEMY[it.kind]) { S.pearls += 2; banner(it.kind === 'goat' ? 'Bye bye, goat! +2' : 'Shoo, crow! +2'); hud(); }
+    if (ENEMY[it.kind]) shoo(it.kind);
   }
 
   function moveLane(d) { const n = THREE.MathUtils.clamp(st.lane + d, 0, 2); if (n !== st.lane) { st.lane = n; sfx.swish(); } }

@@ -192,6 +192,8 @@ export const sfx = {
     const f = 988 * Math.pow(2, streak / 12);
     osc('sine', f, t, .1, .14, sfxBus); osc('sine', f * 1.5, t + .05, .14, .1, sfxBus);
   }),
+  // Knocking out an attacker: a bright arpeggio that climbs higher with each combo step.
+  combo: fx((t, n = 1) => { const k = Math.pow(2, Math.min(n - 1, 4) * 2 / 12); [523, 659, 784, 1047].slice(0, 2 + Math.min(n, 2)).forEach((f, i) => osc('triangle', f * k, t + i * .06, .14, .12, sfxBus)); }),
   jump: fx(t => { osc('square', 300, t, .16, .06, sfxBus, { to: 620, slide: .12, lp: 1800 }); }),
   doubleJump: fx(t => { osc('square', 450, t, .16, .06, sfxBus, { to: 950, slide: .1, lp: 2400 }); osc('sine', 1400, t + .06, .1, .05, sfxBus); }),
   land: fx(t => { osc('sine', 120, t, .08, .2, sfxBus, { to: 60, slide: .06 }); }),

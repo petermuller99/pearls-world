@@ -13,7 +13,7 @@ const SEG = 20;
 const LEVEL_EVERY = 25, MAX_LEVEL = 12, MAX_SPEED = 11;
 const GREETINGS = ['Hi Pearl!', 'Hello Pearl!', 'Bawo ni, Pearl!', 'Kedu, Pearl!', 'Sannu, Pearl!'];
 
-export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mumSay, say, camera, levelUp, powers }) {
+export function createHunt({ scene, P, confetti, S, hurt, boost, shoo, banner, hud, mumSay, say, camera, levelUp, powers }) {
   const world = new THREE.Group(); world.visible = false; scene.add(world);
   const sky = gradientTex([[0, '#5fd8cc'], [.5, '#178ea0'], [1, '#0b3c5d']]);
   const fog = new THREE.Fog(0x1a8fa0, 6, 44);
@@ -303,7 +303,7 @@ export function createHunt({ scene, P, confetti, S, hurt, boost, banner, hud, mu
     confetti.burst(tmpV.copy(it.m.position), 16, 2);
     if (it.kind === 'ink') { removeItem(i); return; }
     it.fly = 1;
-    if (it.kind !== 'jelly') { S.pearls += 2; banner(it.kind === 'puffer' ? 'Pop! Bye, pufferfish! +2' : 'Bye, octopus! +2'); hud(); }
+    if (it.kind !== 'jelly') shoo(it.kind);
   }
   function aim(e) {
     const r = e.target.getBoundingClientRect();
