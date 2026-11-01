@@ -163,7 +163,7 @@ function start(id) {
   clearTimeout(start.hintTimer); start.hintTimer = setTimeout(() => hint.classList.add('off'), 4500);
 }
 function toMenu() {
-  S.mode = 'menu'; stopMusic(); setPaused(false); hud(); $('mumSay').classList.add('off');
+  S.mode = 'menu'; setPaused(false); homeMusic(); hud(); $('mumSay').classList.add('off');
   $('over').hidden = true; $('pausePanel').hidden = true; $('hud').hidden = true; $('menu').hidden = false; $('banner').classList.add('off'); $('hint').classList.add('off');
   updateBank();
 }
@@ -175,6 +175,8 @@ function endGame() {
   const info = game.finish(bank);
   $('overEyebrow').textContent = `${info.eyebrow} · ${S.diff.label}`; $('overTitle').textContent = info.title; $('overText').textContent = info.text;
   setTimeout(() => { if (S.mode === 'over') { $('hud').hidden = true; $('over').hidden = false; } }, 900);
+  // After the end jingle, the home tune comes back.
+  setTimeout(homeMusic, 3000);
 }
 
 /* ---------- menu ---------- */
@@ -230,7 +232,16 @@ for (const [btn, id] of [['playRun', 'run'], ['playDive', 'dive'], ['playZombie'
 function setSound() {
   $('soundBtn').setAttribute('aria-pressed', String(audio.sfxOn));
   $('musicBtn').setAttribute('aria-pressed', String(audio.musicOn));
+  $('setSfx').setAttribute('aria-pressed', String(audio.sfxOn));
+  $('setMusic').setAttribute('aria-pressed', String(audio.musicOn));
 }
+$('setSfx').onclick = () => { unlock(); setSfx(!audio.sfxOn); setSound(); sfx.click(); };
+$('setMusic').onclick = () => { unlock(); setMusic(!audio.musicOn); setSound(); if (S.mode !== 'play') playMusic('home'); };
+// Home screen tune, "Pearl's Lullaby". Phones only allow sound after a touch, so it
+// starts with the first tap anywhere on the menu.
+function homeMusic() { if (S.mode !== 'play') playMusic('home'); }
+document.addEventListener('pointerdown', () => { if (S.mode !== 'play') { unlock(); homeMusic(); } }, true);
+document.addEventListener('keydown', () => { if (S.mode !== 'play') { unlock(); homeMusic(); } }, true);
 $('soundBtn').onclick = () => { unlock(); setSfx(!audio.sfxOn); setSound(); sfx.click(); };
 $('musicBtn').onclick = () => { unlock(); setMusic(!audio.musicOn); setSound(); };
 
