@@ -133,10 +133,21 @@ const HELPS = ['Catch, Pearl!', 'Daddy has something for you!', 'Here, my baby!'
 
 // One Daddy per world. `say(text)` shows his speech bubble, `give(kind, from)` drops a
 // tossed power-up in front of Pearl, `side(px)` picks which side of Pearl he appears on.
-export function createDaddy(parent, { mermaid = false, say, give, kinds }) {
+// `fly` puts him on a jetpack (Danfo to the Moon): he floats at Pearl's height.
+export function createDaddy(parent, { mermaid = false, fly = false, say, give, kinds }) {
   const F = makeDaddyFigure();
   if (mermaid) setMermaid(F, true);
   parent.add(F.root);
+  const air = mermaid || fly, jetFlames = [];
+  if (fly) {
+    // A little red jetpack on his back (the figure faces local +z inside `inner`).
+    const red = new THREE.MeshLambertMaterial({ color: 0xe8333a }), flame = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.5, .4), transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (const sx of [-1, 1]) {
+      const can = mesh(G.cyl, red, .09, .42, .09); can.position.set(sx * .12, .55, -.3); F.inner.add(can);
+      const f = new THREE.Mesh(new THREE.ConeGeometry(.07, .35, 8), flame); f.rotation.x = Math.PI; f.position.set(sx * .12, .18, -.3); F.inner.add(f); jetFlames.push(f);
+    }
+    F.shadow.visible = false;
+  }
   let ph = 0, mode = 'menu', t = 0, helpT = rand(14, 22), spot = new THREE.Vector3(), said = false, tossed = false;
   const pos = F.root.position;
   return {
@@ -145,11 +156,12 @@ export function createDaddy(parent, { mermaid = false, say, give, kinds }) {
     // Called at each milestone: Daddy waits at the side ahead, cheering as Pearl passes.
     cheer(px, py, pz, ahead) {
       mode = 'cheer'; said = false; F.root.visible = true;
-      spot.set(px > 0 ? -2.15 : 2.15, mermaid ? Math.max(.6, py - .3) : 0, pz - ahead);
+      spot.set(px > 0 ? -2.15 : 2.15, air ? Math.max(.6, py - .3) : 0, pz - ahead);
       pos.copy(spot); sfx.cheer();
     },
     update(dt, { px, py, pz, speed, gameMode, caught, time, diff }) {
       t += dt; ph += dt * 6;
+      for (const f of jetFlames) f.scale.y = .7 + Math.random() * .6;
       if (gameMode !== 'play') {
         // Menu and end card: stand with the family.
         F.root.visible = true; mode = 'menu';
@@ -162,21 +174,21 @@ export function createDaddy(parent, { mermaid = false, say, give, kinds }) {
         const d = pz - pos.z;
         if (!said && d < 9 && d > -2) { said = true; say(CHEERS[Math.floor(Math.random() * CHEERS.length)]); }
         posePearl(F, { ph, stage: 1, idle: true, swim: mermaid, t: time, wave: 1, turn: 1 });
-        F.root.position.y = spot.y + (mermaid ? Math.sin(time * 2) * .1 : Math.abs(Math.sin(time * 6)) * .15);
+        F.root.position.y = spot.y + (air ? Math.sin(time * 2) * .1 : Math.abs(Math.sin(time * 6)) * .15);
         if (pos.z > pz + 7) { mode = 'away'; F.root.visible = false; }
       } else if (mode === 'help') {
         // Jog up beside Pearl, toss a power-up ahead of her, then drop back.
         const tx = px + (px > 0 ? -2 : 2);
         const rel = t < 1.6 ? 5 - t * 2.5 : t < 2.6 ? 1 : 1 + (t - 2.6) * 4;
-        pos.set(damp(pos.x, tx, 5, dt), mermaid ? damp(pos.y, py - .2, 4, dt) : 0, pz + rel);
+        pos.set(damp(pos.x, tx, 5, dt), air ? damp(pos.y, py - .2, 4, dt) : 0, pz + rel);
         if (t > 1.2 && !said) { said = true; say(HELPS[Math.floor(Math.random() * HELPS.length)]); }
         if (t > 1.9 && !tossed) { tossed = true; sfx.toss(); give(kinds[Math.floor(Math.random() * kinds.length)], pos.clone().setY(pos.y + 1.3)); }
-        posePearl(F, { ph, stage: 2, swim: mermaid, t: time, wave: t > 1.6 && t < 2.4 ? 1 : 0 });
+        posePearl(F, { ph, stage: fly ? 1 : 2, idle: fly, swim: mermaid, t: time, wave: t > 1.6 && t < 2.4 ? 1 : 0 });
         if (t > 4) { mode = 'away'; F.root.visible = false; helpT = rand(22, 34) * (.6 + diff.attack * .4); }
       } else {
         F.root.visible = false;
         helpT -= dt;
-        if (helpT <= 0) { mode = 'help'; t = 0; said = false; tossed = false; F.root.visible = true; pos.set(px + (px > 0 ? -2 : 2), mermaid ? py : 0, pz + 5); }
+        if (helpT <= 0) { mode = 'help'; t = 0; said = false; tossed = false; F.root.visible = true; pos.set(px + (px > 0 ? -2 : 2), air ? py : 0, pz + 5); }
       }
       F.shadow.position.y = (.015 - pos.y) / 1.45;
     },

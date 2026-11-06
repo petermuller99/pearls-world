@@ -9,6 +9,8 @@ import { createGfx } from './gfx.js';
 import { createRunner } from './runner.js';
 import { createHunt } from './hunt.js';
 import { createZombies } from './zombies.js';
+import { createSpace } from './space.js';
+import { createBlocks } from './blocks.js';
 
 const canvas = $('c');
 let renderer;
@@ -62,7 +64,7 @@ function hud() {
   $('score').textContent = game.scoreText();
   // Zombie Defence shows the house's health and the shooter buttons instead of the chase.
   const z = game.id === 'zombie';
-  $('chase').hidden = z; $('houseBar').hidden = !z; $('whoBar').hidden = !z || S.mode !== 'play'; $('crosshair').hidden = !z || S.mode !== 'play'; $('shootBtn').hidden = !z || S.mode !== 'play';
+  $('chase').hidden = game.usesChase === false; $('houseBar').hidden = !z; $('whoBar').hidden = !z || S.mode !== 'play'; $('crosshair').hidden = !z || S.mode !== 'play'; $('shootBtn').hidden = !z || S.mode !== 'play';
   if (z) {
     $('houseFill').style.width = `${game.house}%`; $('houseBar').classList.toggle('close', game.house < 30);
     for (const b of document.querySelectorAll('#whoBar button')) b.setAttribute('aria-pressed', String(b.dataset.who === game.who));
@@ -76,10 +78,6 @@ function hud() {
       bar.appendChild(b);
     }
     for (const b of bar.children) { const D = game.DEFS[b.dataset.k]; b.classList.toggle('poor', game.cash < D.cost); b.setAttribute('aria-pressed', String(game.placing === b.dataset.k)); }
-    const boss = game.bossInfo;
-    $('bossBar').hidden = !boss || S.mode !== 'play';
-    if (boss) { $('bossName').textContent = boss.name; $('bossFill').style.width = `${boss.frac * 100}%`; }
-    $('banner').style.top = boss && S.mode === 'play' ? 'calc(max(10px, env(safe-area-inset-top, 0px)) + 128px)' : '';
     const [wl, wr] = game.warn;
     $('warnL').hidden = !(wl && S.mode === 'play'); $('warnR').hidden = !(wr && S.mode === 'play');
     $('warnL').textContent = `⚠️ ${wl}`; $('warnR').textContent = `${wr} ⚠️`;
@@ -90,7 +88,12 @@ function hud() {
   $('seedBar').hidden = !z || S.mode !== 'play';
   // Keep the hint above the seed bar in Zombie Defence.
   $('hint').style.bottom = z ? 'calc(156px + env(safe-area-inset-bottom, 0px))' : '';
-  if (!z) { $('warnL').hidden = true; $('warnR').hidden = true; $('bossBar').hidden = true; $('banner').style.top = ''; }
+  if (!z) { $('warnL').hidden = true; $('warnR').hidden = true; }
+  // Boss health bar (Zombie Defence and Danfo to the Moon).
+  const boss = game.bossInfo;
+  $('bossBar').hidden = !boss || S.mode !== 'play';
+  if (boss) { $('bossName').textContent = boss.name; $('bossFill').style.width = `${boss.frac * 100}%`; }
+  $('banner').style.top = boss && S.mode === 'play' ? 'calc(max(10px, env(safe-area-inset-top, 0px)) + 128px)' : '';
   $('fireBtn').hidden = S.mode !== 'play' || S.ammo <= 0 || !!game.noFireButton;
   $('ammo').textContent = S.ammo;
   $('shieldBadge').hidden = !(S.shieldT > 0 && S.mode === 'play');
@@ -119,18 +122,23 @@ const SHOO = {
   crow: { one: 'crow', many: 'crows', bye: 'Shoo, crow!', dad: ['Crow don fly!', 'Oya, comot, crow!'] },
   puffer: { one: 'pufferfish', many: 'pufferfish', bye: 'Pop! Bye, pufferfish!', dad: ['Fish don pop!', 'Pop am, Pearl!'] },
   octo: { one: 'octopus', many: 'octopuses', bye: 'Bye, octopus!', dad: ['Octopus don japa!', 'Ink no fit you!'] },
+  sgoat: { one: 'space goat', many: 'space goats', bye: 'Bye, space goat!', dad: ['Space goat don japa!', 'Goat don fly comot!'] },
+  jcrow: { one: 'jetpack crow', many: 'jetpack crows', bye: 'Shoo, jetpack crow!', dad: ['Crow don land for Mars!', 'Oya, comot, crow!'] },
+  alien: { one: 'jelly alien', many: 'jelly aliens', bye: 'Bye bye, alien!', dad: ['Alien don go home!', 'Go and tell your Oga!'] },
 };
 const DAD_CHEERS = ['Na you be the champion!', 'Pearl, you too much!', 'Ehen! Fire am!', 'Daddy is proud of you!'];
 const COMBO_TIME = 8;
-function shoo(kind) {
+// Danfo to the Moon shoots a lot more, so it passes a lower cap and gap, and only shows
+// the banner every few knockouts (`quiet`).
+function shoo(kind, { cap = 10, gap = .6, quiet = false } = {}) {
   const k = SHOO[kind]; if (!k) return;
   S.combo = S.comboT > 0 ? S.combo + 1 : 1; S.comboT = COMBO_TIME;
-  const gain = Math.min(10, 2 * S.combo);
+  const gain = Math.min(cap, 2 * S.combo);
   S.pearls += gain; S.shoo[kind] = (S.shoo[kind] || 0) + 1;
-  S.gap = Math.min(GAP_MAX, S.gap + .6);
+  S.gap = Math.min(GAP_MAX, S.gap + gap);
   sfx.combo(S.combo);
-  banner(S.combo > 1 ? `Combo x${S.combo}! ${k.bye} +${gain}` : `${k.bye} +${gain}`);
-  if (S.combo >= 2 || Math.random() < .5) {
+  if (!quiet || S.combo % 5 === 0) banner(S.combo > 1 ? `Combo x${S.combo}! ${k.bye} +${gain}` : `${k.bye} +${gain}`);
+  if (quiet ? S.combo % 5 === 0 || Math.random() < .15 : S.combo >= 2 || Math.random() < .5) {
     const lines = S.combo >= 3 ? DAD_CHEERS : k.dad;
     say('dad', lines[Math.floor(Math.random() * lines.length)]); sfx.cheer();
   }
@@ -170,10 +178,12 @@ function buy(u) {
 
 const powers = createPowers(scene, P, S, { banner, hud: () => hud() });
 const ctx = { scene, P, confetti, S, hurt, boost, shoo, mumSay, say, banner, hud: () => hud(), camera, levelUp, powers };
-const games = { run: createRunner(ctx), dive: createHunt(ctx), zombie: createZombies({ ...ctx, endGame: () => endGame() }) };
+const games = { run: createRunner(ctx), dive: createHunt(ctx), zombie: createZombies({ ...ctx, endGame: () => endGame() }), space: createSpace(ctx), blocks: createBlocks({ ...ctx, endGame: () => endGame() }) };
 let game = games[store.get('pw_last', 'run')] || games.run;
 game.enter();
 gfx.setShadowLight(game.shadowLight, game.shadowSize);
+// Show the last game's card in the scrolling row of games.
+{ const c = $({ run: 'playRun', dive: 'playDive', zombie: 'playZombie', space: 'playSpace', blocks: 'playBlocks' }[game.id]); const row = c.parentElement; row.scrollLeft = Math.max(0, c.offsetLeft - row.offsetLeft - 8); }
 gfx.init();
 
 function switchTo(id) {
@@ -217,6 +227,8 @@ function endGame() {
 $('playRun').onclick = () => start('run');
 $('playDive').onclick = () => start('dive');
 $('playZombie').onclick = () => start('zombie');
+$('playSpace').onclick = () => start('space');
+$('playBlocks').onclick = () => start('blocks');
 for (const b of document.querySelectorAll('#whoBar button')) b.onclick = () => { sfx.click(); game.setWho(b.dataset.who); };
 $('againBtn').onclick = () => start(game.id);
 $('menuBtn').onclick = toMenu;
@@ -258,7 +270,7 @@ $('quitBtn').onclick = () => { setPaused(false); endGame(); toMenu(); };
 }
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (S.mode === 'play' && !S.paused) game.fire(); });
 // Hovering or focusing a game card shows its world behind the menu.
-for (const [btn, id] of [['playRun', 'run'], ['playDive', 'dive'], ['playZombie', 'zombie']]) {
+for (const [btn, id] of [['playRun', 'run'], ['playDive', 'dive'], ['playZombie', 'zombie'], ['playSpace', 'space'], ['playBlocks', 'blocks']]) {
   $(btn).addEventListener('pointerenter', e => { if (e.pointerType === 'mouse' && S.mode === 'menu') switchTo(id); });
   $(btn).addEventListener('focus', () => { if (S.mode === 'menu') switchTo(id); });
 }

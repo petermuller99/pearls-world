@@ -156,7 +156,56 @@ const HOME = {
     for (const [ms, m] of this.melody[b]) if (ms === s) I.kalimba(t, m + (second ? 12 : 0), second ? .7 : .9, !!second);
   },
 };
-const SONGS = { run: SUNSET, dive: LAGOON, zombie: ZOMBIE, home: HOME };
+// Moon Danfo (Danfo to the Moon): a bouncy space Afrobeat in D minor over Dm - Bb - F - C,
+// with a twinkly arpeggio and a kalimba tune that echoes like it's far away in space.
+const SPACE = {
+  bpm: lv => 112 + Math.min(lv - 1, 8) * 3,
+  roots: [38, 46, 41, 48],
+  chords: [[62, 65, 69], [58, 62, 65], [65, 69, 72], [60, 64, 67]],
+  melody: [
+    [[0, 74], [3, 77], [6, 81], [10, 79], [12, 77]],
+    [[0, 74], [4, 70], [6, 74], [8, 77], [12, 74]],
+    [[0, 72], [3, 77], [6, 81], [8, 84], [12, 81]],
+    [[0, 79], [4, 76], [8, 72], [12, 76], [14, 79]],
+  ],
+  play(step, t, sd, lv) {
+    const s = step % 16, bar = Math.floor(step / 16), b = bar % 4, ch = this.chords[b];
+    if (s === 0 || s === 8 || (s === 6 && lv >= 2)) I.kick(t);
+    if (s === 4 || s === 12) I.clap(t, .8);
+    I.shaker(t, s % 4 === 2 ? 1.1 : .45);
+    const bass = { 0: 0, 3: 0, 6: 12, 8: 7, 11: 0, 14: 12 };
+    if (bass[s] != null) I.bass(t, this.roots[b] + bass[s], sd * 1.6);
+    if (s === 0) for (const m of ch) I.pad(t, m - 12, sd * 15, .7);
+    // The twinkly arpeggio, climbing through the chord.
+    osc('square', mtof(ch[s % 3] + 12 + (s >= 8 ? 12 : 0)), t, .07, .028, musicBus, { lp: 2200, echo: s % 4 === 0 });
+    if (Math.floor(bar / 4) % 3 !== 2) for (const [ms, m] of this.melody[b]) if (ms === s) I.kalimba(t, m, .9, true);
+    if (lv >= 3 && (s === 7 || s === 15)) I.talk(t, 50, .6);
+  },
+};
+// Count With Me (Number Drop): a bright, bouncy counting tune in C over C - F - G - C.
+// The kalimba walks up the scale like counting 1, 2, 3.
+const BLOCKS = {
+  bpm: lv => 100 + Math.min(lv - 1, 8) * 2.5,
+  roots: [48, 41, 43, 48],
+  chords: [[60, 64, 67], [65, 69, 72], [67, 71, 74], [60, 64, 67]],
+  melody: [
+    [[0, 72], [2, 74], [4, 76], [6, 77], [8, 79], [12, 76]],
+    [[0, 77], [2, 76], [4, 74], [6, 72], [8, 74], [12, 69]],
+    [[0, 71], [2, 72], [4, 74], [6, 76], [8, 79], [12, 74]],
+    [[0, 76], [4, 74], [6, 72], [8, 67], [10, 72], [12, 72]],
+  ],
+  play(step, t, sd, lv) {
+    const s = step % 16, bar = Math.floor(step / 16), b = bar % 4, ch = this.chords[b];
+    if (s === 0 || s === 8) I.kick(t, .7);
+    if (s === 4 || s === 12) I.clap(t, .6);
+    if (s % 2 === 0) I.shaker(t, s % 4 ? .5 : .8);
+    if (s === 0 || s === 6 || s === 10) I.bass(t, this.roots[b] + (s === 6 ? 7 : s === 10 ? 12 : 0), sd * 2.2, .7);
+    if (s % 4 === 2) I.guitar(t, ch[(s / 4 | 0) % 3] + 12, .8);
+    for (const [ms, m] of this.melody[b]) if (ms === s) I.kalimba(t, m, 1, Math.floor(bar / 4) % 2 === 1);
+    if (lv >= 3 && s % 4 === 3) I.shaker(t, .35);
+  },
+};
+const SONGS = { run: SUNSET, dive: LAGOON, zombie: ZOMBIE, space: SPACE, blocks: BLOCKS, home: HOME };
 
 let song = null, step = 0, nextT = 0, timer = null, level = 1;
 export function playMusic(name) {
