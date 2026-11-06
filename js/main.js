@@ -90,7 +90,7 @@ function hud() {
   // Keep the hint above the seed bar in Zombie Defence.
   $('hint').style.bottom = z ? 'calc(156px + env(safe-area-inset-bottom, 0px))' : '';
   if (!z) { $('warnL').hidden = true; $('warnR').hidden = true; }
-  // Boss health bar (Zombie Defence and Danfo to the Moon).
+  // Boss health bar (Zombie Defence and Space Hunt).
   const boss = game.bossInfo;
   $('bossBar').hidden = !boss || S.mode !== 'play';
   if (boss) { $('bossName').textContent = boss.name; $('bossFill').style.width = `${boss.frac * 100}%`; }
@@ -99,6 +99,7 @@ function hud() {
   $('ammo').textContent = S.ammo;
   $('shieldBadge').hidden = !(S.shieldT > 0 && S.mode === 'play');
   $('magnetBadge').hidden = !(S.magnetT > 0 && S.mode === 'play');
+  const gb = game.badgeText; $('gameBadge').hidden = !gb || S.mode !== 'play'; if (gb) $('gameBadge').textContent = gb;
 }
 // A bump trips Pearl up and lets Mummy gain ground. The shield bubble blocks one bump.
 function hurt(msg, sound = sfx.hit, amount = 2) {
@@ -129,7 +130,7 @@ const SHOO = {
 };
 const DAD_CHEERS = ['Na you be the champion!', 'Pearl, you too much!', 'Ehen! Fire am!', 'Daddy is proud of you!'];
 const COMBO_TIME = 8;
-// Danfo to the Moon shoots a lot more, so it passes a lower cap and gap, and only shows
+// Space Hunt shoots a lot more, so it passes a lower cap and gap, and only shows
 // the banner every few knockouts (`quiet`).
 function shoo(kind, { cap = 10, gap = .6, quiet = false } = {}) {
   const k = SHOO[kind]; if (!k) return;
