@@ -139,7 +139,7 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     const free = [];
     for (let c = 0; c <= N - w; c++) if (restY({ c, w, h, y: SPAWN_Y }) + h * B / 2 < TOP + 1) free.push(c);
     const c = opts.c ?? (free.length ? free[Math.floor(Math.random() * free.length)] : Math.floor(rand(0, N - w + 1)));
-    const num = kind === 'mega' ? { n: Math.round((25 + lv * 4) * (S.diff.label === 'Easy' ? .4 : 1)) } : numberFor(lv);
+    const num = kind === 'mega' ? { n: Math.round((15 + lv * 2) * (S.diff.label === 'Easy' ? .5 : 1)) } : numberFor(lv);
     const color = kind === 'gold' ? '#ffc93c' : kind === 'jollof' ? '#e8501f' : kind === 'bread' ? '#d9a35a' : kind === 'mega' ? '#24163d' : COLS[Math.floor(Math.random() * COLS.length)];
     const m = new THREE.Mesh(boxGeo); m.scale.set(w * CW - (CW - B), h * B, B); m.castShadow = true;
     const b = { kind, c, w, h, n: num.n, max: num.n, sum: num.sum, color, m, y: SPAWN_Y, landed: false, drop: false, hit: 0, wob: rand(0, 6) };
@@ -162,12 +162,12 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     const at = tmpV.set(b.m.position.x, b.m.position.y, .4);
     confetti.burst(at, b.kind === 'mega' ? 70 : 22);
     st.popped++; st.big = Math.max(st.big, b.max);
-    let gain = Math.ceil(b.max / 3) + (b.kind === 'gold' ? 15 : 0) + (b.kind === 'mega' ? 20 : 0);
-    // Quick pops chain together for a bonus.
+    let gain = 1 + Math.floor(b.max / 8) + (b.kind === 'gold' ? 10 : 0) + (b.kind === 'mega' ? 12 : 0);
+    // Quick pops chain together for a small bonus.
     st.chain = st.chainT > 0 ? st.chain + 1 : 1; st.chainT = 1.6;
-    if (st.chain >= 3) gain += st.chain - 1;
+    if (st.chain >= 3 && st.chain % 3 === 0 && S.diff.label !== 'Easy') gain += 2;
     S.pearls += gain;
-    const pop = textSprite(`+${gain}`, { color: b.kind === 'gold' ? '#c9962e' : '#ff6b4a' }); pop.position.copy(at); pop.position.y += .4; world.add(pop); floaters.push({ s: pop, life: .9 });
+    const pop = textSprite(`+${gain}`, { color: b.kind === 'gold' ? '#c9962e' : '#ff6b4a' }); pop.scale.multiplyScalar(1.8); pop.position.copy(at); pop.position.y += .4; world.add(pop); floaters.push({ s: pop, life: .9 });
     if (!quiet) {
       sfx.zPop(); if (st.chain >= 2) sfx.combo(st.chain);
       if (S.diff.label === 'Easy') speak(b.max);
@@ -200,6 +200,9 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
   }
   function cheer(who, text) { say(who, text); fam[who].cheer = 1.6; if (who === 'dad') sfx.cheer(); }
 
+  // A soft glow up the column Pearl is aiming at.
+  const aimBeam = new THREE.Mesh(new THREE.PlaneGeometry(B * .9, TOP - FLOOR), new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0, depthWrite: false }));
+  aimBeam.position.set(0, (TOP + FLOOR) / 2, -.56); world.add(aimBeam);
   const shotMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 2, 2.4) });
   const shotGlow = new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: .4, blending: THREE.AdditiveBlending, depthWrite: false });
   for (let i = 0; i < 30; i++) { const g = new THREE.Group(); g.add(mesh(G.lowSphere, shotMat, .1)); g.add(mesh(G.lowSphere, shotGlow, .19)); g.visible = false; world.add(g); shots.push({ g, life: 0, c: 0, prev: 0 }); }
@@ -293,11 +296,14 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
         if (f.cheer > 0) f.F.root.position.y = Math.abs(Math.sin(S.t * 8)) * .12; else f.F.root.position.y = 0;
       }
 
+      aimBeam.position.x = colX(nearestCol(st.x));
+      aimBeam.material.opacity = damp(aimBeam.material.opacity, playing ? (st.firing || keys[' '] ? .28 : .12) : 0, 8, dt);
       if (playing) {
         st.fireT -= dt;
         if ((st.firing || keys[' ']) && st.fireT <= 0) { st.fireT = .13 * S.up.bRate; shoot(); }
         st.spawnT -= dt;
-        if (st.spawnT <= 0) { addBlock(); st.spawnT = Math.max(1.15, 2.7 - st.level * .12) / (.75 + S.diff.attack * .25); }
+        // Two blocks at once now and then from level 3, so the board stays busy.
+        if (st.spawnT <= 0) { addBlock(); if (st.level >= 3 && Math.random() < .2) addBlock(); st.spawnT = Math.max(1.1, 2.1 - st.level * .09) / (.75 + S.diff.attack * .25); }
         if (st.chainT > 0) st.chainT -= dt;
       }
 
