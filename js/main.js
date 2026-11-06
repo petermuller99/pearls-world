@@ -61,7 +61,8 @@ function hud() {
   $('mumMark').style.left = `${(1 - k) * 100}%`;
   $('chase').classList.toggle('close', S.gap < 3);
   $('chase').setAttribute('aria-label', `Mummy is ${S.gap < 3 ? 'very close' : S.gap < 6 ? 'catching up' : 'far behind'}`);
-  $('score').textContent = game.scoreText();
+  // Each part ("25 pearls", "Level 4") stays together when the line wraps on a narrow phone.
+  $('score').textContent = game.scoreText().split(' · ').map(t => t.replace(/ /g, '\u00a0')).join(' · ');
   // Zombie Defence shows the house's health and the shooter buttons instead of the chase.
   const z = game.id === 'zombie';
   $('chase').hidden = game.usesChase === false; $('houseBar').hidden = !z; $('whoBar').hidden = !z || S.mode !== 'play'; $('crosshair').hidden = !z || S.mode !== 'play'; $('shootBtn').hidden = !z || S.mode !== 'play';

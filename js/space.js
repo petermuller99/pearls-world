@@ -334,22 +334,25 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
   function spawn(z) {
     const lv = st.level, stage = stageOf(lv);
     const px = rand(X_MIN + .4, X_MAX - .4), py = rand(Y_MIN + .3, Y_MAX - .5), r = Math.random();
-    if (r < .5) {
+    if (r < .45) {
       const dx = rand(-.25, .25), dy = rand(-.15, .15);
-      for (let k = 0; k < 6; k++) addPearl(THREE.MathUtils.clamp(px + dx * k, X_MIN, X_MAX), THREE.MathUtils.clamp(py + dy * k, Y_MIN, Y_MAX), z - k * 1.3);
-    } else if (r < .7) {
+      for (let k = 0; k < 4; k++) addPearl(THREE.MathUtils.clamp(px + dx * k, X_MIN, X_MAX), THREE.MathUtils.clamp(py + dy * k, Y_MIN, Y_MAX), z - k * 1.3);
+    } else if (r < .6) {
       const cx = THREE.MathUtils.clamp(px, X_MIN + .9, X_MAX - .9), cy = THREE.MathUtils.clamp(py, Y_MIN + .9, Y_MAX - .9);
-      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; addPearl(cx + Math.cos(a) * .85, cy + Math.sin(a) * .85, z); }
+      for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; addPearl(cx + Math.cos(a) * .85, cy + Math.sin(a) * .85, z); }
     }
-    const busy = boss ? .45 : 1, at = S.diff.attack * busy;
+    // Hard is a little softer here than in the other games: there is a lot coming at you.
+    // Keeps getting a little busier after the last level, so a great run still ends some time.
+    const ramp = 1 + Math.max(0, st.time - LEVEL_EVERY * MAX_LEVEL) / 150;
+    const busy = boss ? .45 : 1, at = Math.pow(S.diff.attack, .6) * busy * ramp;
     // A little line or zig-zag of space goats.
     if (Math.random() < Math.min(.7, .35 + lv * .04) * at) {
-      const n = lv >= 3 && Math.random() < .5 ? 3 : 1, x0 = rand(X_MIN + .5, X_MAX - .5), y0 = rand(Y_MIN + .5, Y_MAX - .5);
+      const n = lv >= 6 && Math.random() < .5 ? 4 : lv >= 3 && Math.random() < .5 ? 3 : 1, x0 = rand(X_MIN + .5, X_MAX - .5), y0 = rand(Y_MIN + .5, Y_MAX - .5);
       for (let k = 0; k < n; k++) addEnemy('sgoat', THREE.MathUtils.clamp(x0 + (k - 1) * 1.3, X_MIN, X_MAX), y0, z - 10 - k * 2.5);
     }
-    if (Math.random() < Math.min(.5, .18 + lv * .04) * at) addEnemy('jcrow', (Math.random() < .5 ? -1 : 1) * 6, rand(Y_MIN + .5, Y_MAX - .3), z - rand(12, 18));
+    for (let k = lv >= 5 ? 2 : 1; k > 0; k--) if (Math.random() < Math.min(.5, .18 + lv * .04) * at) addEnemy('jcrow', (Math.random() < .5 ? -1 : 1) * 6, rand(Y_MIN + .5, Y_MAX - .3), z - rand(12, 18));
     if (lv >= 2 && Math.random() < Math.min(.4, (lv - 1) * .07) * at) addEnemy('alien', rand(X_MIN + .5, X_MAX - .5), rand(Y_MIN + .8, Y_MAX - .3), z - rand(14, 20));
-    if (stage >= 1 && Math.random() < Math.min(.6, .2 + lv * .04) * at) addEnemy('meteor', rand(X_MIN, X_MAX), rand(Y_MIN, Y_MAX), z - rand(8, 16));
+    for (let k = lv >= 7 ? 2 : 1; k > 0; k--) if (stage >= 1 && Math.random() < Math.min(.6, .2 + lv * .04) * at) addEnemy('meteor', rand(X_MIN, X_MAX), rand(Y_MIN, Y_MAX), z - rand(8, 16));
     if (S.gap < 7 && Math.random() < .14) addHeart(rand(X_MIN + .3, X_MAX - .3), rand(Y_MIN + .3, Y_MAX - .3), z - rand(2, 6));
     st.rows++;
     const pw = st.rows === 3 ? 'fire' : Math.random() < .1 * S.up.luck ? POWERS[Math.floor(Math.random() * POWERS.length)] : null;
@@ -368,7 +371,7 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
   function knockOut(e) {
     if (e.fly) return;
     e.fly = 1; confetti.burst(tmpV.copy(e.m.position), 14, 2); sfx.zPop();
-    if (SHOO_KIND[e.kind]) shoo(e.kind, { cap: 4, gap: .3, quiet: true });
+    if (SHOO_KIND[e.kind]) shoo(e.kind, { cap: 1, gap: .12, quiet: true });
     else { S.pearls++; hud(); }
   }
 
@@ -399,6 +402,7 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
   return {
     id: 'space',
     items: enemies,
+    pickups: items,
     startBanner: 'Blast off, Pearl!',
     hint: 'Touch and hold to fly and shoot.',
     world, st, shadowLight: key,
@@ -502,18 +506,24 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
           st.waveT = 1.8; dad.cheer(st.x, st.y - .4, st.z, 14 + st.speed * 1.5);
           for (const e of enemies) if (!e.fly && e.m.position.z < st.z && e.m.position.z > st.z - st.speed * 3 - 8) e.fly = 1;
         }
-        while (st.nextSpawn > st.z - 55) { spawn(st.nextSpawn); st.nextSpawn -= Math.max(5, rand(8, 12) - st.level * .35); }
+        // Rows come at a steady pace whatever the speed; higher levels fill each row more.
+        while (st.nextSpawn > st.z - 55) { spawn(st.nextSpawn); st.nextSpawn -= Math.max(7, st.speed * rand(1.1, 1.5) * (1 - st.level * .025)); }
       }
 
       // Bubble shots
       for (const s of shots) {
         if (s.life <= 0) continue;
-        s.life -= dt; s.g.position.addScaledVector(s.v, dt);
+        s.life -= dt;
         let done = s.life <= 0;
-        for (const e of enemies) {
-          if (done || e.fly || s.g.position.distanceTo(e.m.position) > e.r + .2) continue;
-          done = true; e.hit = .12; sfx.zHit();
-          if (--e.hp <= 0) knockOut(e);
+        // Small steps so a fast bubble can't skip past an attacker between frames.
+        const n = Math.ceil(s.v.length() * dt / .35);
+        for (let k = 0; k < n && !done; k++) {
+          s.g.position.addScaledVector(s.v, dt / n);
+          for (const e of enemies) {
+            if (done || e.fly || s.g.position.distanceTo(e.m.position) > e.r + .2) continue;
+            done = true; e.hit = .12; sfx.zHit();
+            if (--e.hp <= 0) knockOut(e);
+          }
         }
         for (let i = goo.length - 1; i >= 0 && !done; i--) if (s.g.position.distanceTo(goo[i].m.position) < .35) { done = true; confetti.burst(tmpV.copy(goo[i].m.position), 6, 2); world.remove(goo[i].m); goo.splice(i, 1); }
         if (!done && boss && !boss.leaving && s.g.position.distanceTo(boss.m.position) < 2.2) {
@@ -559,10 +569,10 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
         if (p.z > st.z + 6) { removeEnemy(i); continue; }
         e.ph += dt; e.hit -= dt;
         e.m.scale.setScalar(e.hit > 0 ? 1.15 : 1);
-        const d = st.z - p.z;
-        if (e.kind === 'sgoat') { p.x = e.x0 + Math.sin(e.ph * 1.6) * 1.1; p.y = e.y0 + Math.sin(e.ph * 2.3) * .4; p.z += 1.5 * dt; e.m.rotation.y = Math.sin(e.ph * 1.6) * .4; }
+        const d = st.z - p.z, rush = 1 + st.level * .08;
+        if (e.kind === 'sgoat') { p.x = e.x0 + Math.sin(e.ph * 1.6) * 1.1; p.y = e.y0 + Math.sin(e.ph * 2.3) * .4; p.z += 1.5 * rush * dt; e.m.rotation.y = Math.sin(e.ph * 1.6) * .4; }
         else if (e.kind === 'jcrow') {
-          p.x += e.vx * dt; p.y = e.y0 + Math.sin(e.ph * 3) * .5; p.z += 2.5 * dt;
+          p.x += e.vx * rush * dt; p.y = e.y0 + Math.sin(e.ph * 3) * .5; p.z += 2.5 * rush * dt;
           if (Math.abs(p.x) > 6.5) e.vx = -e.vx;
           e.m.rotation.y = e.vx > 0 ? -.6 : .6;
           e.m.userData.wings.forEach((w, k) => { w.rotation.z = (k ? -1 : 1) * Math.sin(S.t * 18) * .6; });
@@ -575,7 +585,7 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
             if (e.shootT <= 0 && st.level >= 2) { e.shootT = Math.max(1.2, 2.6 - st.level * .1); addGoo(tmpV.copy(p), tmpV2.set(st.x, st.y + .25, st.z - st.speed * .7)); }
           }
           if (e.bubble) { e.bubble.position.set(p.x, p.y + 1.1, p.z); e.sayT -= dt; if (e.sayT <= 0) { world.remove(e.bubble); e.bubble = null; } }
-        } else { e.m.rotation.x += e.spin.x * dt; e.m.rotation.y += e.spin.y * dt; p.z += 3 * dt; }
+        } else { e.m.rotation.x += e.spin.x * dt; e.m.rotation.y += e.spin.y * dt; p.z += 3 * rush * dt; }
         if (playing && S.inv <= 0 && Math.abs(p.z - st.z) < .8 && Math.hypot(p.x - cx, p.y - cy) < e.r + .45) {
           e.fly = 1;
           const msg = { sgoat: 'Bonk! Cheeky space goat!', jcrow: 'Caw! Jetpack crow!', alien: 'Squish! Jelly alien!', meteor: 'Bump! Space rock!' }[e.kind];
@@ -585,7 +595,7 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
       for (let i = goo.length - 1; i >= 0; i--) {
         const g = goo[i];
         g.m.position.addScaledVector(g.v, dt); g.life -= dt; g.m.scale.setScalar(.2 * (1 + Math.sin(S.t * 20) * .1));
-        if (playing && S.inv <= 0 && g.m.position.distanceTo(tmpV.set(cx, cy, st.z)) < .6) { world.remove(g.m); goo.splice(i, 1); hurt('Splat! Sticky alien slime!', sfx.ink, 2); continue; }
+        if (playing && S.inv <= 0 && g.m.position.distanceTo(tmpV.set(cx, cy, st.z)) < .6) { world.remove(g.m); goo.splice(i, 1); hurt('Splat! Sticky alien slime!', sfx.ink, 1.5); continue; }
         if (g.life <= 0 || g.m.position.z > st.z + 6) { world.remove(g.m); goo.splice(i, 1); }
       }
 
