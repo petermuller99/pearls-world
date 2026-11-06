@@ -25,7 +25,14 @@ const DROPS = {
   slow: { icon: '🐢', name: 'Slow blocks', say: 'Slowly slowly, blocks!', time: 9 },
   broom: { icon: '🧹', name: "Mummy's broom", say: "Mummy's broom! Tidy up!" },
 };
-const DROP_KINDS = Object.keys(DROPS);
+// The broom is rarer than the others.
+const DROP_KINDS = ['triple', 'fast', 'big', 'slow', 'triple', 'fast', 'big', 'slow', 'broom'];
+// Power-ups are generous on Easy and rarer, shorter and quicker to vanish on Normal and Hard.
+const DROP_RULES = {
+  Easy: { first: 8, every: [7, 11], time: 1, wait: 6, fall: 1.1 },
+  Normal: { first: 12, every: [13, 19], time: .6, wait: 3, fall: 1.7 },
+  Hard: { first: 15, every: [16, 24], time: .5, wait: 2.5, fall: 2.2 },
+};
 const DOTS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
 
 export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, levelUp, endGame }) {
@@ -197,7 +204,9 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
       banner('Jollof pot! The whole row is gone!'); sfx.milestone();
       for (const o of [...blocks]) if (Math.abs(o.y - b.y) < B * .6) popBlock(o, true);
     }
-    if (!quiet && st.popped >= st.nextDrop && !drop) { st.nextDrop = st.popped + Math.round(rand(7, 11) / S.up.luck); addDrop(); }
+    if (!quiet && st.popped >= st.nextDrop && !drop) { const e = rules().every; st.nextDrop = st.popped + Math.round(rand(e[0], e[1]) / S.up.luck); addDrop(); }
+    // Beat your own best: a cheer the moment you pass it.
+    if (!st.beatBest && st.best >= 10 && st.popped > st.best) { st.beatBest = true; banner(`New best! ${st.popped} blocks!`); cheer('dad', 'New record! Na you be the champion!'); sfx.milestone(); }
     if (st.popped % POPS_PER_LEVEL === 0 && st.level < MAX_LEVEL) {
       st.level++;
       const extra = st.level === 2 ? ' Gold blocks!' : st.level === 3 ? ' Jollof pots!' : st.level === 4 ? ' Agege bread!' : '';
@@ -208,6 +217,7 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     hud();
   }
   /* ---------- power-up drops ---------- */
+  const rules = () => DROP_RULES[S.diff.label] || DROP_RULES.Normal;
   const dropTex = {};
   function dropIcon(kind) {
     return dropTex[kind] || (dropTex[kind] = tex(128, 128, (c, w, h) => {
@@ -237,16 +247,18 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     removeDrop();
     if (d.kind === 'broom') {
       // Sweeps the top toy off every column.
-      const tops = [];
+      let tops = [];
       for (let c = 0; c < N; c++) {
         let top = null;
         for (const b of blocks) if (b.landed && b.c <= c && b.c + b.w > c && (!top || b.y > top.y)) top = b;
         if (top && !tops.includes(top)) tops.push(top);
       }
+      // On Normal and Hard it only reaches the three tallest piles.
+      if (S.diff.label !== 'Easy') tops = tops.sort((a, b) => b.y - a.y).slice(0, 3);
       for (const b of tops) popBlock(b, true);
       banner(`${info.icon} ${info.name}! ${tops.length} toys tidied!`);
     } else {
-      st.pw[d.kind] = info.time; banner(`${info.icon} ${info.name}!`);
+      st.pw[d.kind] = Math.round(info.time * rules().time); banner(`${info.icon} ${info.name}!`);
     }
     cheer(d.kind === 'broom' ? 'mum' : 'dad', info.say);
     hud();
@@ -271,7 +283,7 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
   const floaters = [];
 
   /* ---------- state and input ---------- */
-  const st = { level: 1, x: 0, tx: 0, vx: 0, ph: 0, firing: false, fireT: 0, spawnT: 1, popped: 0, big: 0, chain: 0, chainT: 0, warnT: 0, shotN: 0, wave: 0, nextDrop: 8, pw: {} };
+  const st = { level: 1, x: 0, tx: 0, vx: 0, ph: 0, firing: false, fireT: 0, spawnT: 1, popped: 0, big: 0, chain: 0, chainT: 0, warnT: 0, shotN: 0, wave: 0, nextDrop: 8, pw: {}, time: 0, best: 0, beatBest: false };
   const keys = {};
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), hit = new THREE.Vector3();
   const tmpV = new THREE.Vector3(), tip = new THREE.Vector3();
@@ -324,7 +336,8 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     exit() { world.visible = false; clearAll(); P.arms[1].remove(blaster); P.root.scale.setScalar(1); },
     start() {
       clearAll();
-      Object.assign(st, { level: 1, x: 0, tx: 0, vx: 0, firing: false, fireT: 0, spawnT: 1, popped: 0, big: 0, chain: 0, chainT: 0, warnT: 0, shotN: 0, nextDrop: 8, pw: {} });
+      Object.assign(st, { level: 1, x: 0, tx: 0, vx: 0, firing: false, fireT: 0, spawnT: 1, popped: 0, big: 0, chain: 0, chainT: 0, warnT: 0, shotN: 0, nextDrop: 8, pw: {}, time: 0, best: 0, beatBest: false });
+      st.nextDrop = rules().first; st.best = store.get('pw_bbest', 0);
       for (let i = 0; i < 3; i++) { const b = addBlock(); b.c = i * 2 + 1; b.y = SPAWN_Y + i * 1.6; b.m.position.x = colX(b.c); }
       setTimeout(() => { if (S.mode === 'play') say('mum', 'Mind the pile, Pearl!'); }, 1200);
     },
@@ -334,7 +347,7 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
       return {
         eyebrow: rec && best ? 'New best!' : 'The toys piled up',
         title: 'Tidy up time, Pearl!',
-        text: `Pearl popped ${st.popped} blocks and reached level ${st.level}. Biggest block: ${st.big}. Piggy bank: ${bank} pearls.`,
+        text: `Pearl popped ${st.popped} blocks and reached level ${st.level}. ${rec ? 'Her best ever!' : `Best: ${best}.`} Biggest block: ${st.big}. Piggy bank: ${bank} pearls.`,
       };
     },
     update(dt) {
@@ -378,9 +391,12 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
           if (st.pw[k] <= 0) { delete st.pw[k]; banner(`${DROPS[k].name} finished`); hud(); }
           else if (Math.ceil(st.pw[k]) !== before) hud();
         }
-        st.spawnT -= dt;
+        st.spawnT -= dt; st.time += dt;
+        // After about 2.5 minutes the blocks keep coming a little faster (not on Easy),
+        // so a great run still ends some time.
+        const rush = S.diff.label === 'Easy' ? 1 : 1 + Math.max(0, st.time - 150) / 150;
         // Two blocks at once now and then from level 3, so the board stays busy.
-        if (st.spawnT <= 0) { addBlock(); if (st.level >= 3 && Math.random() < .2) addBlock(); st.spawnT = Math.max(1.1, 2.1 - st.level * .09) / (.75 + S.diff.attack * .25); }
+        if (st.spawnT <= 0) { addBlock(); if (st.level >= 3 && Math.random() < .2) addBlock(); st.spawnT = Math.max(1.1, 2.1 - st.level * .09) / (.75 + S.diff.attack * .25) / rush; }
         if (st.chainT > 0) st.chainT -= dt;
       }
 
@@ -420,12 +436,13 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
         let base = FLOOR;
         for (const b of blocks) if (b.landed && b.c <= drop.c && b.c + b.w > drop.c) base = Math.max(base, b.y + b.h * B / 2);
         const rest = base + .45;
-        if (drop.y > rest) drop.y = Math.max(rest, drop.y - (drop.y > TOP + 1 ? 4 : 1.1 * (st.pw.slow > 0 ? .6 : 1)) * dt);
+        if (drop.y > rest) drop.y = Math.max(rest, drop.y - (drop.y > TOP + 1 ? 4 : rules().fall) * dt);
         else { drop.y = rest; drop.restT += dt; }
         drop.g.position.set(colX(drop.c) + Math.sin(S.t * 3) * .06, drop.y, .7);
         drop.icon.material.rotation = Math.sin(S.t * 2.5) * .25;
-        drop.g.visible = drop.restT < 4 || Math.floor(S.t * 8) % 2 === 0;
-        if (drop.restT > 6 || !playing) removeDrop();
+        const wait = rules().wait;
+        drop.g.visible = drop.restT < wait - 1.5 || Math.floor(S.t * 8) % 2 === 0;
+        if (drop.restT > wait || !playing) removeDrop();
       }
       // Bubbles fly up their column and hit the lowest block (or power-up) in it.
       for (const s of shots) {
