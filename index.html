@@ -50,6 +50,8 @@ p{margin:0}
 .mode.run{background:var(--coral)}
 .mode.dive{background:var(--lagoon)}
 .mode.zombie{background:#5a3f8f}
+.mode.space{background:#1d2a6b}
+.mode.blocks{background:#2f8f4e}
 .house{display:flex;align-items:center;gap:6px;width:min(40vw,170px);text-shadow:none;font-size:20px}
 .house .track{flex:1;height:14px;border-radius:999px;background:rgba(36,22,61,.5);border:3px solid var(--ink);box-shadow:0 2px 0 var(--ink);overflow:hidden;display:block}
 .house .fill{display:block;height:100%;width:100%;background:linear-gradient(90deg,#7fe38a,#ffc93c);transition:width .2s}
@@ -86,7 +88,9 @@ p{margin:0}
 .tool.shop{background:var(--coral);color:var(--pearl)}
 .tool.icon{font-size:16px;padding:5px 6px}
 .tool:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
-.menu .modes{grid-template-columns:repeat(3,1fr);gap:8px}
+.menu .modes{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 2px 8px;margin:0 -2px;scrollbar-width:thin;overscroll-behavior-x:contain}
+/* Five games: three cards show at once and the row scrolls sideways, with the next card peeking in. */
+.menu .mode{flex:0 0 calc((100% - 16px) / 3.25);scroll-snap-align:start}
 .menu .mode{align-items:center;text-align:center;padding:10px 6px;gap:2px;border-radius:18px}
 .menu .mode .mi{font-size:30px;line-height:1.1}
 .menu .mode .mt{font-size:clamp(15px,4.4vw,19px);line-height:1.05}
@@ -209,6 +213,8 @@ button:focus-visible,a:focus-visible,label:focus-visible{outline:3px solid var(-
         <button class="mode run" id="playRun"><span class="mi" aria-hidden="true">🏃🏾‍♀️</span><span class="mt">First Steps</span><span class="md">Run and jump</span></button>
         <button class="mode dive" id="playDive"><span class="mi" aria-hidden="true">🧜🏾‍♀️</span><span class="mt">Pearl Hunt</span><span class="md">Swim and collect</span></button>
         <button class="mode zombie" id="playZombie"><span class="mi" aria-hidden="true">🧟</span><span class="mt">Zombie Defence</span><span class="md">Shoot and plant</span></button>
+        <button class="mode space" id="playSpace"><span class="mi" aria-hidden="true">🚀</span><span class="mt">Danfo to the Moon</span><span class="md">Fly and shoot</span></button>
+        <button class="mode blocks" id="playBlocks"><span class="mi" aria-hidden="true">🔢</span><span class="mt">Number Drop</span><span class="md">Count and pop</span></button>
       </div>
       <div class="diff" id="difficulty" role="group" aria-label="Difficulty">
         <button class="chip" data-d="easy" aria-pressed="false">🍼 Easy</button>

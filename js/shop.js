@@ -29,6 +29,13 @@ export const UPGRADES = [
     says: ['Start with an empty yard', 'Start with 1 Pepper Shooter planted', 'Start with 2 Pepper Shooters planted', 'Start with 3 Pepper Shooters planted'] },
   { id: 'zCash', group: 'zombie', icon: '💰', name: 'Rich start', costs: [60, 150, 300],
     says: ['Start with ₦150', 'Start with ₦250', 'Start with ₦350', 'Start with ₦500'] },
+  // Number Drop
+  { id: 'bRate', group: 'blocks', icon: '🫧', name: 'Bubble speed', costs: [70, 180, 360],
+    says: ['Normal bubbles', '18% more bubbles', '39% more bubbles', '67% more bubbles'] },
+  { id: 'bPow', group: 'blocks', icon: '💥', name: 'Big bubbles', costs: [90, 220, 450],
+    says: ['Each bubble takes off 1', 'Every 4th bubble takes off 2', 'Every other bubble takes off 2', 'Every bubble takes off 2'] },
+  { id: 'bSlow', group: 'blocks', icon: '🐢', name: 'Sleepy blocks', costs: [60, 150, 300],
+    says: ['Blocks fall at normal speed', 'Blocks fall 10% slower', 'Blocks fall 20% slower', 'Blocks fall 30% slower'] },
 ];
 export const MAX_LEVEL = 3;
 
@@ -53,6 +60,7 @@ export function upgradeEffects(lv) {
     zAuto: lv.zAuto, zRate: [1, .85, .72, .6][lv.zRate], zDmg: [1, 1.3, 1.6, 2][lv.zDmg],
     zFam: [1, .8, .65, .5][lv.zFam], zAim: [1, .7, .45, .25][lv.zFam],
     zSeed: lv.zSeed, zCash: [150, 250, 350, 500][lv.zCash],
+    bRate: [1, .85, .72, .6][lv.bRate], bEvery: [0, 4, 2, 1][lv.bPow], bSlow: [1, .9, .8, .7][lv.bSlow],
   };
 }
 
@@ -65,7 +73,7 @@ export function renderShop(list, lv, bank, onBuy) {
     if (g !== group) {
       group = g;
       const h = document.createElement('h3'); h.className = 'shopGroup';
-      h.textContent = g === 'zombie' ? 'Zombie Defence' : 'First Steps and Pearl Hunt';
+      h.textContent = g === 'zombie' ? 'Zombie Defence' : g === 'blocks' ? 'Number Drop' : 'First Steps, Pearl Hunt and Danfo to the Moon';
       list.appendChild(h);
     }
     const level = lv[u.id], maxed = level >= MAX_LEVEL, cost = u.costs[level];

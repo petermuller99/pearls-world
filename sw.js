@@ -2,7 +2,7 @@
 // Game files: serve from cache straight away, refresh the cache in the background,
 // so the game opens instantly offline and picks up updates on the next launch.
 // Bump VERSION when the list of files below changes.
-const VERSION = 'pw-v22';
+const VERSION = 'pw-v23';
 const SHELL = [
   './',
   'index.html',
@@ -17,6 +17,8 @@ const SHELL = [
   'vendor/three.module.min.js',
   'js/gfx.js',
   'js/zombies.js',
+  'js/space.js',
+  'js/blocks.js',
   'vendor/addons/postprocessing/EffectComposer.js',
   'vendor/addons/postprocessing/RenderPass.js',
   'vendor/addons/postprocessing/UnrealBloomPass.js',
