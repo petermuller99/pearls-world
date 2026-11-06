@@ -17,6 +17,15 @@ const X_LIM = colX(N - 1) + .2;
 const POPS_PER_LEVEL = 12, MAX_LEVEL = 15;
 const COLS = ['#ff6b4a', '#0f8a8f', '#ff5c8a', '#6b4fc9', '#3aa655', '#2f6fd6'];
 const DAD_LINES = ['Pop am, Pearl!', 'Na you be the champion!', 'Count am well!', 'Daddy is proud of you!', 'Ehen! Big block don go!'];
+// Power-ups that float down now and then: shoot one to catch it.
+const DROPS = {
+  triple: { icon: '✨', name: 'Triple bubbles', say: 'Three at once! Oya!', time: 10 },
+  fast: { icon: '⚡', name: 'Fast bubbles', say: 'Fast fast, Pearl!', time: 10 },
+  big: { icon: '💥', name: 'Big bubbles', say: 'Big bubbles! Pop them!', time: 10 },
+  slow: { icon: '🐢', name: 'Slow blocks', say: 'Slowly slowly, blocks!', time: 9 },
+  broom: { icon: '🧹', name: "Mummy's broom", say: "Mummy's broom! Tidy up!" },
+};
+const DROP_KINDS = Object.keys(DROPS);
 const DOTS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
 
 export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, levelUp, endGame }) {
@@ -142,17 +151,24 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     const num = kind === 'mega' ? { n: Math.round((15 + lv * 2) * (S.diff.label === 'Easy' ? .5 : 1)) } : numberFor(lv);
     const color = kind === 'gold' ? '#ffc93c' : kind === 'jollof' ? '#e8501f' : kind === 'bread' ? '#d9a35a' : kind === 'mega' ? '#24163d' : COLS[Math.floor(Math.random() * COLS.length)];
     const m = new THREE.Mesh(boxGeo); m.scale.set(w * CW - (CW - B), h * B, B); m.castShadow = true;
-    const b = { kind, c, w, h, n: num.n, max: num.n, sum: num.sum, color, m, y: SPAWN_Y, landed: false, drop: false, hit: 0, wob: rand(0, 6) };
-    m.position.set(colX(c) + (w - 1) * CW / 2, SPAWN_Y, 0);
+    // Never start inside another block that is still falling in the same columns.
+    let y = SPAWN_Y;
+    for (const o of blocks) if (!o.landed && o.c < c + w && o.c + o.w > c) y = Math.max(y, o.y + (o.h + h) * B / 2 + .3);
+    const b = { kind, c, w, h, n: num.n, max: num.n, sum: num.sum, color, m, y, landed: false, drop: false, hit: 0, wob: rand(0, 6) };
+    m.position.set(colX(c) + (w - 1) * CW / 2, y, 0);
     setFace(b); world.add(m); blocks.push(b);
     return b;
   }
   // Where a falling block would come to rest: on the canopy or on the blocks below it.
+  // `restOn` is the block underneath (null for the canopy), so a block that catches up with
+  // one still falling rides on it instead of counting as part of the pile.
+  let restOn = null;
   function restY(b) {
-    let base = FLOOR;
+    let base = FLOOR; restOn = null;
     for (const o of blocks) {
-      if (o === b || o.y > b.y || o.c + o.w <= b.c || o.c >= b.c + b.w) continue;
-      base = Math.max(base, o.y + o.h * B / 2);
+      if (o === b || o.y >= b.y || o.c + o.w <= b.c || o.c >= b.c + b.w) continue;
+      const top = o.y + o.h * B / 2;
+      if (top > base) { base = top; restOn = o; }
     }
     return base + b.h * B / 2;
   }
@@ -181,6 +197,7 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
       banner('Jollof pot! The whole row is gone!'); sfx.milestone();
       for (const o of [...blocks]) if (Math.abs(o.y - b.y) < B * .6) popBlock(o, true);
     }
+    if (!quiet && st.popped >= st.nextDrop && !drop) { st.nextDrop = st.popped + Math.round(rand(7, 11) / S.up.luck); addDrop(); }
     if (st.popped % POPS_PER_LEVEL === 0 && st.level < MAX_LEVEL) {
       st.level++;
       const extra = st.level === 2 ? ' Gold blocks!' : st.level === 3 ? ' Jollof pots!' : st.level === 4 ? ' Agege bread!' : '';
@@ -190,6 +207,51 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     }
     hud();
   }
+  /* ---------- power-up drops ---------- */
+  const dropTex = {};
+  function dropIcon(kind) {
+    return dropTex[kind] || (dropTex[kind] = tex(128, 128, (c, w, h) => {
+      c.fillStyle = '#fff8f0'; c.strokeStyle = '#24163d'; c.lineWidth = 8;
+      c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 6, 0, 7); c.fill(); c.stroke();
+      c.font = '64px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(DROPS[kind].icon, w / 2, h / 2 + 4);
+    }));
+  }
+  const dropGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 1.2, .5), transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false });
+  let drop = null;
+  function addDrop(kind = DROP_KINDS[Math.floor(Math.random() * DROP_KINDS.length)], c = Math.floor(rand(0, N))) {
+    if (drop) removeDrop();
+    const g = new THREE.Group();
+    const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: dropIcon(kind), depthWrite: false, fog: false })); icon.scale.setScalar(.8); g.add(icon);
+    g.add(mesh(G.lowSphere, dropGlow, .55));
+    g.position.set(colX(c), SPAWN_Y, .7); world.add(g);
+    drop = { kind, c, g, icon, y: SPAWN_Y, restT: 0 };
+    sfx.power();
+    banner(`${DROPS[kind].icon} ${DROPS[kind].name}! Shoot it!`);
+    return drop;
+  }
+  function removeDrop() { if (drop) { world.remove(drop.g); drop = null; } }
+  function catchDrop() {
+    const d = drop, info = DROPS[d.kind];
+    confetti.burst(tmpV.set(d.g.position.x, d.g.position.y, .6), 30); sfx.milestone();
+    removeDrop();
+    if (d.kind === 'broom') {
+      // Sweeps the top toy off every column.
+      const tops = [];
+      for (let c = 0; c < N; c++) {
+        let top = null;
+        for (const b of blocks) if (b.landed && b.c <= c && b.c + b.w > c && (!top || b.y > top.y)) top = b;
+        if (top && !tops.includes(top)) tops.push(top);
+      }
+      for (const b of tops) popBlock(b, true);
+      banner(`${info.icon} ${info.name}! ${tops.length} toys tidied!`);
+    } else {
+      st.pw[d.kind] = info.time; banner(`${info.icon} ${info.name}!`);
+    }
+    cheer(d.kind === 'broom' ? 'mum' : 'dad', info.say);
+    hud();
+  }
+
   // Easy mode says the number out loud, so Pearl hears it as she counts the dots.
   function speak(n) {
     try {
@@ -205,11 +267,11 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
   aimBeam.position.set(0, (TOP + FLOOR) / 2, -.56); world.add(aimBeam);
   const shotMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 2, 2.4) });
   const shotGlow = new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: .4, blending: THREE.AdditiveBlending, depthWrite: false });
-  for (let i = 0; i < 30; i++) { const g = new THREE.Group(); g.add(mesh(G.lowSphere, shotMat, .1)); g.add(mesh(G.lowSphere, shotGlow, .19)); g.visible = false; world.add(g); shots.push({ g, life: 0, c: 0, prev: 0 }); }
+  for (let i = 0; i < 60; i++) { const g = new THREE.Group(); g.add(mesh(G.lowSphere, shotMat, .1)); g.add(mesh(G.lowSphere, shotGlow, .19)); g.visible = false; world.add(g); shots.push({ g, life: 0, c: 0, prev: 0 }); }
   const floaters = [];
 
   /* ---------- state and input ---------- */
-  const st = { level: 1, x: 0, tx: 0, vx: 0, ph: 0, firing: false, fireT: 0, spawnT: 1, popped: 0, big: 0, chain: 0, chainT: 0, warnT: 0, shotN: 0, wave: 0 };
+  const st = { level: 1, x: 0, tx: 0, vx: 0, ph: 0, firing: false, fireT: 0, spawnT: 1, popped: 0, big: 0, chain: 0, chainT: 0, warnT: 0, shotN: 0, wave: 0, nextDrop: 8, pw: {} };
   const keys = {};
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), hit = new THREE.Vector3();
   const tmpV = new THREE.Vector3(), tip = new THREE.Vector3();
@@ -221,18 +283,25 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
   }
   const nearestCol = x => THREE.MathUtils.clamp(Math.round(x / CW + (N - 1) / 2), 0, N - 1);
   function shoot() {
-    const s = shots.find(s => s.life <= 0); if (!s) return;
     blaster.userData.tip.getWorldPosition(tip);
-    // Bubbles always fly straight up the column she's standing under.
-    s.c = nearestCol(st.x); s.life = 1.2; s.g.visible = true;
-    s.g.position.set(colX(s.c), Math.max(1.2, tip.y), .1); s.prev = s.g.position.y;
-    st.shotN++; s.dmg = S.up.bEvery && st.shotN % S.up.bEvery === 0 ? 2 : 1;
+    st.shotN++;
+    // Bubbles always fly straight up the column she's standing under (and its neighbours
+    // with triple bubbles).
+    const c0 = nearestCol(st.x), cols = st.pw.triple > 0 ? [c0 - 1, c0, c0 + 1].filter(c => c >= 0 && c < N) : [c0];
+    for (const c of cols) {
+      const s = shots.find(s => s.life <= 0); if (!s) return;
+      s.c = c; s.life = 1.2; s.g.visible = true;
+      s.g.position.set(colX(c), Math.max(1.2, tip.y) - (c === c0 ? 0 : .3), .1); s.prev = s.g.position.y;
+      s.dmg = (S.up.bEvery && st.shotN % S.up.bEvery === 0 ? 2 : 1) + (st.pw.big > 0 ? 2 : 0);
+      s.g.scale.setScalar(st.pw.big > 0 ? 1.7 : 1);
+    }
     if (st.shotN % 2) sfx.bubbleShot();
   }
   function clearAll() {
     for (const b of blocks) world.remove(b.m); blocks.length = 0;
     for (const s of shots) { s.life = 0; s.g.visible = false; }
     for (const f of floaters) world.remove(f.s); floaters.length = 0;
+    removeDrop(); st.pw = {};
   }
 
   return {
@@ -240,6 +309,8 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     usesChase: false,
     noFireButton: true,
     items: blocks,
+    get drop() { return drop; }, addDrop,
+    get badgeText() { return Object.entries(st.pw).filter(([, t]) => t > 0).map(([k, t]) => `${DROPS[k].icon} ${Math.ceil(t)}`).join(' ') || null; },
     startBanner: 'Pop the numbers!',
     get hint() { return S.diff.label === 'Easy' ? 'Count the dots! Drag to move, hold to shoot.' : S.diff.label === 'Hard' ? 'Work out the sums! Drag to move, hold to shoot.' : 'Drag to move. Hold your finger down to shoot.'; },
     world, st, shadowLight: sun, shadowSize: 9,
@@ -253,7 +324,7 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
     exit() { world.visible = false; clearAll(); P.arms[1].remove(blaster); P.root.scale.setScalar(1); },
     start() {
       clearAll();
-      Object.assign(st, { level: 1, x: 0, tx: 0, vx: 0, firing: false, fireT: 0, spawnT: 1, popped: 0, big: 0, chain: 0, chainT: 0, warnT: 0, shotN: 0 });
+      Object.assign(st, { level: 1, x: 0, tx: 0, vx: 0, firing: false, fireT: 0, spawnT: 1, popped: 0, big: 0, chain: 0, chainT: 0, warnT: 0, shotN: 0, nextDrop: 8, pw: {} });
       for (let i = 0; i < 3; i++) { const b = addBlock(); b.c = i * 2 + 1; b.y = SPAWN_Y + i * 1.6; b.m.position.x = colX(b.c); }
       setTimeout(() => { if (S.mode === 'play') say('mum', 'Mind the pile, Pearl!'); }, 1200);
     },
@@ -300,7 +371,13 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
       aimBeam.material.opacity = damp(aimBeam.material.opacity, playing ? (st.firing || keys[' '] ? .28 : .12) : 0, 8, dt);
       if (playing) {
         st.fireT -= dt;
-        if ((st.firing || keys[' ']) && st.fireT <= 0) { st.fireT = .13 * S.up.bRate; shoot(); }
+        if ((st.firing || keys[' ']) && st.fireT <= 0) { st.fireT = .13 * S.up.bRate * (st.pw.fast > 0 ? .5 : 1); shoot(); }
+        // Power-up timers; the HUD badge counts down each second.
+        for (const k in st.pw) if (st.pw[k] > 0) {
+          const before = Math.ceil(st.pw[k]); st.pw[k] -= dt;
+          if (st.pw[k] <= 0) { delete st.pw[k]; banner(`${DROPS[k].name} finished`); hud(); }
+          else if (Math.ceil(st.pw[k]) !== before) hud();
+        }
         st.spawnT -= dt;
         // Two blocks at once now and then from level 3, so the board stays busy.
         if (st.spawnT <= 0) { addBlock(); if (st.level >= 3 && Math.random() < .2) addBlock(); st.spawnT = Math.max(1.1, 2.1 - st.level * .09) / (.75 + S.diff.attack * .25); }
@@ -309,12 +386,20 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
 
       // Falling and landing.
       let highest = FLOOR;
-      const fall = (.6 + st.level * .055) * S.diff.speed * S.up.bSlow;
+      const fall = (.6 + st.level * .055) * S.diff.speed * S.up.bSlow * (st.pw.slow > 0 ? .4 : 1);
+      // Lowest first, so a block knows whether the one under it has landed yet.
+      blocks.sort((a, b) => a.y - b.y);
       for (const b of blocks) {
-        const rest = restY(b);
+        const rest = restY(b), on = restOn;
         // New blocks drift down slowly; a block whose support was popped drops quickly.
         if (b.y > rest + .001) { if (b.landed) { b.landed = false; b.drop = true; } b.y = Math.max(rest, b.y - (b.drop || b.y > TOP + 1 ? 5 : fall) * dt); }
-        else { b.y = rest; if (!b.landed) { b.landed = true; b.drop = false; if (playing) sfx.land(); } }
+        else {
+          b.y = rest;
+          // Only part of the pile once everything under it has landed too.
+          const settled = !on || on.landed;
+          if (settled && !b.landed) { b.landed = true; b.drop = false; if (playing) sfx.land(); }
+          else if (!settled) b.landed = false;
+        }
         b.hit -= dt;
         const k = b.hit > 0 ? 1.08 : 1;
         b.m.position.set(colX(b.c) + (b.w - 1) * CW / 2, b.y, 0);
@@ -330,7 +415,19 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
         if (highest >= TOP - .02) { banner('Tidy up time, Pearl!'); endGame(); }
       }
 
-      // Bubbles fly up their column and hit the lowest block in it.
+      // The power-up floats down its column and waits on top of the pile for a while.
+      if (drop) {
+        let base = FLOOR;
+        for (const b of blocks) if (b.landed && b.c <= drop.c && b.c + b.w > drop.c) base = Math.max(base, b.y + b.h * B / 2);
+        const rest = base + .45;
+        if (drop.y > rest) drop.y = Math.max(rest, drop.y - (drop.y > TOP + 1 ? 4 : 1.1 * (st.pw.slow > 0 ? .6 : 1)) * dt);
+        else { drop.y = rest; drop.restT += dt; }
+        drop.g.position.set(colX(drop.c) + Math.sin(S.t * 3) * .06, drop.y, .7);
+        drop.icon.material.rotation = Math.sin(S.t * 2.5) * .25;
+        drop.g.visible = drop.restT < 4 || Math.floor(S.t * 8) % 2 === 0;
+        if (drop.restT > 6 || !playing) removeDrop();
+      }
+      // Bubbles fly up their column and hit the lowest block (or power-up) in it.
       for (const s of shots) {
         if (s.life <= 0) continue;
         s.life -= dt; s.prev = s.g.position.y; s.g.position.y += 17 * dt;
@@ -339,6 +436,9 @@ export function createBlocks({ scene, P, confetti, S, banner, hud, say, camera, 
           if (s.c < b.c || s.c >= b.c + b.w) continue;
           const bottom = b.y - b.h * B / 2;
           if (s.g.position.y >= bottom && s.prev <= b.y + b.h * B / 2 && (!target || b.y < target.y)) target = b;
+        }
+        if (drop && s.c === drop.c && s.g.position.y >= drop.y - .45 && s.prev <= drop.y + .45 && (!target || drop.y < target.y)) {
+          s.life = 0; s.g.visible = false; catchDrop(); continue;
         }
         if (target) {
           s.life = 0; target.hit = .08; target.n -= s.dmg; sfx.zHit();

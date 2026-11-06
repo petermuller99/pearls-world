@@ -156,7 +156,7 @@ const HOME = {
     for (const [ms, m] of this.melody[b]) if (ms === s) I.kalimba(t, m + (second ? 12 : 0), second ? .7 : .9, !!second);
   },
 };
-// Moon Danfo (Danfo to the Moon): a bouncy space Afrobeat in D minor over Dm - Bb - F - C,
+// Moon Danfo (Space Hunt): a bouncy space Afrobeat in D minor over Dm - Bb - F - C,
 // with a twinkly arpeggio and a kalimba tune that echoes like it's far away in space.
 const SPACE = {
   bpm: lv => 112 + Math.min(lv - 1, 8) * 3,

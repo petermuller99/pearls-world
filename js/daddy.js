@@ -133,7 +133,7 @@ const HELPS = ['Catch, Pearl!', 'Daddy has something for you!', 'Here, my baby!'
 
 // One Daddy per world. `say(text)` shows his speech bubble, `give(kind, from)` drops a
 // tossed power-up in front of Pearl, `side(px)` picks which side of Pearl he appears on.
-// `fly` puts him on a jetpack (Danfo to the Moon): he floats at Pearl's height.
+// `fly` puts him on a jetpack (Space Hunt): he floats at Pearl's height.
 export function createDaddy(parent, { mermaid = false, fly = false, say, give, kinds }) {
   const F = makeDaddyFigure();
   if (mermaid) setMermaid(F, true);

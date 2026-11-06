@@ -1,5 +1,5 @@
-// Danfo to the Moon: Pearl flies the family danfo, fitted with rocket boosters, from the
-// Lagos sky up into space (toward -z). Touch and hold to steer and shoot pearl bubbles.
+// Space Hunt: Pearl flies the family danfo, fitted with rocket boosters, through space
+// (toward -z), from orbit round Earth to the Moon and Planet Jollof. Touch and hold to steer and shoot pearl bubbles.
 // Mummy follows in her keke rocket because it's bedtime; Daddy flies alongside on a jetpack.
 import { THREE, M, G, mesh, tex, gradientTex, rand, lerp, damp, posePearl, setMermaid, textSprite, COL, outlined, store } from './common.js';
 import { sfx } from './audio.js';
@@ -10,12 +10,11 @@ const X_MIN = -3, X_MAX = 3, Y_MIN = 1, Y_MAX = 5.2, HOME_Y = 2.6;
 // A new level every 22 seconds. Every two levels Pearl reaches a new place.
 const LEVEL_EVERY = 22, MAX_LEVEL = 12, MAX_SPEED = 15;
 const STAGES = [
-  { name: 'Lagos Sky', banner: 'Blast off over Lagos!', sky: [[0, '#ff8f6b'], [.55, '#ffc58a'], [1, '#ffe3b0']], fog: 0xffd9a8 },
   { name: 'Orbit', banner: 'Orbit! Wave to Nigeria!', sky: [[0, '#04051a'], [.6, '#101848'], [1, '#22306e']], fog: 0x101848 },
   { name: 'The Moon', banner: 'The Moon! Hello, Moon!', sky: [[0, '#05041a'], [.7, '#1b1640'], [1, '#3a2f5a']], fog: 0x1b1640 },
   { name: 'Planet Jollof', banner: 'Planet Jollof! Smells nice o!', sky: [[0, '#16040e'], [.6, '#4a1230'], [1, '#8a2a2a']], fog: 0x4a1230 },
 ];
-const stageOf = lv => lv >= 7 ? 3 : lv >= 5 ? 2 : lv >= 3 ? 1 : 0;
+const stageOf = lv => lv >= 5 ? 2 : lv >= 3 ? 1 : 0;
 const MILESTONES = [{ m: 10, t: 'Blast off, Pearl!' }, { m: 25, t: 'Pearl the astronaut!' }, { m: 50, t: 'Star collector!' }, { m: 100, t: 'Queen of the galaxy!' }, { m: 200, t: 'Richest baby in space!' }];
 const BOSSES = {
   ufo: { name: 'Big Bubble Goat UFO', says: 'Meeeh! This sky is mine!' },
@@ -26,7 +25,7 @@ const ALIEN_SAYS = ['Take me to your Oga!', 'Hello, earth baby!', 'Is that jollo
 export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, hud, mumSay, say, camera, levelUp, powers }) {
   const world = new THREE.Group(); world.visible = false; scene.add(world);
   const skies = STAGES.map(s => gradientTex(s.sky));
-  const fog = new THREE.Fog(STAGES[0].fog, 40, 190);
+  const fog = new THREE.Fog(STAGES[0].fog, 60, 320);
 
   /* ---------- lights ---------- */
   world.add(new THREE.HemisphereLight(0xfff0e0, 0x3a3060, 1.8));
@@ -111,31 +110,11 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
   }
   const mum = { x: 0, y: HOME_Y, talkT: 4 };
 
-  /* ---------- scenery: clouds, Lagos below, stars, planets ---------- */
-  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xfff8f0 });
-  const clouds = [];
-  for (let i = 0; i < 16; i++) {
-    const g = new THREE.Group();
-    for (let k = 0; k < 4; k++) { const b = mesh(G.lowSphere, cloudMat, rand(1.2, 2.2), rand(.8, 1.3), rand(1, 1.8)); b.position.set(k * 1.6 - 2.4, rand(-.3, .3), rand(-.5, .5)); g.add(b); }
-    g.position.set((Math.random() < .5 ? -1 : 1) * rand(5, 20), rand(-6, 9), -rand(0, 200)); world.add(g); clouds.push(g);
-  }
-  // Lagos from above: the lagoon, land with neat rows of roofs and roads, and a long bridge.
-  const groundTex = tex(512, 512, (c, w, h) => {
-    c.fillStyle = '#3a9fa4'; c.fillRect(0, 0, w, h);
-    c.fillStyle = '#e3cfa8'; c.fillRect(0, 0, w * .42, h); c.fillRect(w * .62, h * .1, w * .38, h * .9);
-    const roofs = ['#c9775a', '#b9b2a8', '#e8e0d2', '#a85a44'];
-    for (const [x0, x1] of [[8, w * .42 - 8], [w * .62 + 8, w - 8]]) for (let y = 8; y < h - 8; y += 14) for (let x = x0; x < x1; x += 12) if ((x * 7 + y * 3) % 5) { c.fillStyle = roofs[(x + y) % 4]; c.fillRect(x, y, 8, 9); }
-    c.fillStyle = '#f4ead6'; for (let y = 50; y < h; y += 90) { c.fillRect(0, y, w * .42, 5); c.fillRect(w * .62, y + 40, w * .38, 5); }
-    c.fillStyle = '#fff8f0'; c.fillRect(w * .42, h * .55, w * .2, 6);
-  }, true);
-  groundTex.repeat.set(3, 3);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshLambertMaterial({ map: groundTex }));
-  ground.rotation.x = -Math.PI / 2; ground.userData.noShadow = true; world.add(ground);
-
+  /* ---------- scenery: stars, planets, satellites ---------- */
   const STAR_N = 700, starPos = new Float32Array(STAR_N * 3);
   for (let i = 0; i < STAR_N; i++) { starPos[i * 3] = rand(-90, 90); starPos[i * 3 + 1] = rand(-50, 70); starPos[i * 3 + 2] = -rand(0, 300); }
   const starGeo = new THREE.BufferGeometry(); starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-  const starMat = new THREE.PointsMaterial({ color: 0xfff8f0, size: .6, transparent: true, opacity: 0, fog: false, depthWrite: false });
+  const starMat = new THREE.PointsMaterial({ color: 0xfff8f0, size: .6, transparent: true, opacity: 1, fog: false, depthWrite: false });
   const stars = new THREE.Points(starGeo, starMat); stars.frustumCulled = false; world.add(stars);
   // Speed streaks rushing past.
   const streakMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .35, depthWrite: false });
@@ -164,7 +143,7 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
     const ring = new THREE.Mesh(new THREE.TorusGeometry(64, 6, 2, 80), new THREE.MeshLambertMaterial({ map: ringTex, fog: false }));
     ring.rotation.x = Math.PI / 2 - .35; ring.scale.z = .25; g.add(ring);
   });
-  const PLANETS = [[earth, 1, [-60, -85, -175]], [moon, 2, [55, -8, -210]], [jollof, 3, [-48, 12, -210]]];
+  const PLANETS = [[earth, 0, [-60, -85, -175]], [moon, 1, [55, -8, -210]], [jollof, 2, [-48, 12, -210]]];
 
   // NigComSat, Nigeria's own satellite, floating past in orbit.
   const sats = [];
@@ -332,7 +311,7 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
 
   /* ---------- spawning ---------- */
   function spawn(z) {
-    const lv = st.level, stage = stageOf(lv);
+    const lv = st.level;
     const px = rand(X_MIN + .4, X_MAX - .4), py = rand(Y_MIN + .3, Y_MAX - .5), r = Math.random();
     if (r < .45) {
       const dx = rand(-.25, .25), dy = rand(-.15, .15);
@@ -352,7 +331,7 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
     }
     for (let k = lv >= 5 ? 2 : 1; k > 0; k--) if (Math.random() < Math.min(.5, .18 + lv * .04) * at) addEnemy('jcrow', (Math.random() < .5 ? -1 : 1) * 6, rand(Y_MIN + .5, Y_MAX - .3), z - rand(12, 18));
     if (lv >= 2 && Math.random() < Math.min(.4, (lv - 1) * .07) * at) addEnemy('alien', rand(X_MIN + .5, X_MAX - .5), rand(Y_MIN + .8, Y_MAX - .3), z - rand(14, 20));
-    for (let k = lv >= 7 ? 2 : 1; k > 0; k--) if (stage >= 1 && Math.random() < Math.min(.6, .2 + lv * .04) * at) addEnemy('meteor', rand(X_MIN, X_MAX), rand(Y_MIN, Y_MAX), z - rand(8, 16));
+    for (let k = lv >= 7 ? 2 : 1; k > 0; k--) if (lv >= 3 && Math.random() < Math.min(.6, .2 + lv * .04) * at) addEnemy('meteor', rand(X_MIN, X_MAX), rand(Y_MIN, Y_MAX), z - rand(8, 16));
     if (S.gap < 7 && Math.random() < .14) addHeart(rand(X_MIN + .3, X_MAX - .3), rand(Y_MIN + .3, Y_MAX - .3), z - rand(2, 6));
     st.rows++;
     const pw = st.rows === 3 ? 'fire' : Math.random() < .1 * S.up.luck ? POWERS[Math.floor(Math.random() * POWERS.length)] : null;
@@ -395,7 +374,6 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
   function setStage(i, announce) {
     st.stage = i;
     scene.background = skies[i]; fog.color.setHex(STAGES[i].fog);
-    fog.near = i ? 60 : 40; fog.far = i ? 320 : 190;
     if (announce) { banner(STAGES[i].banner); sfx.levelUp(); }
   }
 
@@ -625,15 +603,12 @@ export function createSpace({ scene, P, confetti, S, hurt, boost, shoo, banner, 
 
       // Scenery follows Pearl through the sky and space.
       const sg = st.stage;
-      for (const c of clouds) { c.visible = sg === 0; if (c.position.z > st.z + 15) { c.position.z -= 210; c.position.x = (Math.random() < .5 ? -1 : 1) * rand(5, 20); c.position.y = rand(-6, 9); } }
-      ground.visible = sg === 0; ground.position.set(st.x * .3, -32, st.z - 120); groundTex.offset.y = st.z / 500 * 3;
-      starMat.opacity = damp(starMat.opacity, sg === 0 ? .15 : 1, 1.5, dt);
       for (let i = 0; i < STAR_N; i++) if (starPos[i * 3 + 2] > st.z + 20) starPos[i * 3 + 2] -= 300;
       starGeo.attributes.position.needsUpdate = true;
       for (const s of streaks) { if (s.position.z > st.z + 8) { s.position.z -= 80; s.position.x = st.x + rand(-9, 9); s.position.y = st.y + rand(-5, 6); } }
       streakMat.opacity = playing ? Math.min(.45, st.speed * .03) : 0;
       for (const [pl, s, [x, y, z]] of PLANETS) { pl.visible = sg === s; pl.position.set(x, y, st.z + z); pl.userData.spin.rotation.y += dt * .03; }
-      for (const s of sats) { s.visible = sg === 1; s.rotation.y += dt * .4; if (s.position.z > st.z + 15) { s.position.z = st.z - rand(150, 220); s.position.x = (Math.random() < .5 ? -1 : 1) * rand(6, 11); } }
+      for (const s of sats) { s.visible = sg === 0; s.rotation.y += dt * .4; if (s.position.z > st.z + 15) { s.position.z = st.z - rand(150, 220); s.position.x = (Math.random() < .5 ? -1 : 1) * rand(6, 11); } }
       key.position.set(st.x + 3, st.y + 10, st.z + 4); key.target.position.set(st.x, st.y, st.z - 3);
       front.position.set(st.x + 1, st.y + 2, st.z - 8); front.target.position.set(st.x, st.y, st.z);
     },

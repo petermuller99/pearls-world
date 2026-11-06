@@ -73,7 +73,7 @@ export function renderShop(list, lv, bank, onBuy) {
     if (g !== group) {
       group = g;
       const h = document.createElement('h3'); h.className = 'shopGroup';
-      h.textContent = g === 'zombie' ? 'Zombie Defence' : g === 'blocks' ? 'Number Drop' : 'First Steps, Pearl Hunt and Danfo to the Moon';
+      h.textContent = g === 'zombie' ? 'Zombie Defence' : g === 'blocks' ? 'Number Drop' : 'First Steps, Pearl Hunt and Space Hunt';
       list.appendChild(h);
     }
     const level = lv[u.id], maxed = level >= MAX_LEVEL, cost = u.costs[level];
